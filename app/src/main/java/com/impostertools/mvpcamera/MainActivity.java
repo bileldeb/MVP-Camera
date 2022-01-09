@@ -107,7 +107,7 @@ public class MainActivity extends AppCompatActivity {
 
 
 
-        GPUImage paralell = new GPUImage(getApplicationContext());
+        //GPUImage paralell = new GPUImage(getApplicationContext());
         gpuImageView = findViewById(R.id.gpuimageview);
         //gpuImageView.setBackgroundColor(R.color.transparent);
         chromakey = new GPUImageChromaKeyBlendFilter();
@@ -170,7 +170,6 @@ public class MainActivity extends AppCompatActivity {
 
 
 
-
         executor = Executors.newSingleThreadExecutor();
         camera_capture_button.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -178,7 +177,7 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(getApplicationContext(), "Recording must be implemented",Toast.LENGTH_SHORT).show();
             }
             // ADD CODE HERE
-            // CHECK RECORDING STATUS AND CALL A FUNCTION TO INITIALZE RECORDER OR TO STOP IT
+            // CHECK RECORDING STATUS AND CALL EITHER initRecorder() or stopRecorder()
 
         });
 
@@ -199,7 +198,8 @@ public class MainActivity extends AppCompatActivity {
                     REQUEST_CODE_CAMERA_PERMISSION);
             return false;
         }
-        // IF RECORDING WITH AUDIO ADD AUDIO PERMISSION IN MANIFEST AND COMPLETE CHECK PERMISSION TO INCLUDE AUDIO
+        // ADD CODE HERE
+        // RECORDING WITH AUDIO ADD AUDIO PERMISSION IN MANIFEST AND COMPLETE CHECK PERMISSION TO INCLUDE AUDIO
         return true;
     }
 
@@ -259,6 +259,9 @@ public class MainActivity extends AppCompatActivity {
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build();
 
+
+
+        //IMAGE ANALYSIS
         imageAnalysis.setAnalyzer(executor, new ImageAnalysis.Analyzer() {
             @Override
             public void analyze(@NonNull ImageProxy image) {
@@ -275,7 +278,7 @@ public class MainActivity extends AppCompatActivity {
                 mSmoothing= smoothing.getValue();
                 ((GPUImageChromaKeyBlendFilter) chromakey).setSmoothing(mSmoothing);
 
-                ((GPUImageChromaKeyBlendFilter) chromakey).setBitmap(bgBMP);
+
 
 
                 Bitmap frame = toBitmap(imagine,mat);
@@ -284,7 +287,7 @@ public class MainActivity extends AppCompatActivity {
 
                 // ADD CODE HERE
                 // USE gpuImageView.capture() TO RETRIEVE CURRENT DISPLAYED FRAME WITH EFFECTS APPLIED AS BITMAP
-                // PASS IT TO THE RECORDING FUNCTION
+                // PASS IT TO THE RECORDING FUNCTION updateRecorder(...)
 
 
                 if(SystemClock.elapsedRealtime() - mLastAnalysisResultTime < 500) {
@@ -333,7 +336,7 @@ public class MainActivity extends AppCompatActivity {
         mR = random.nextFloat();
         mG = random.nextFloat();
         mB = random.nextFloat();
-        Toast.makeText(getApplicationContext(),"color picker should be implemented",Toast.LENGTH_LONG).show();
+        Toast.makeText(getApplicationContext(),"color picker should be implemented",Toast.LENGTH_SHORT).show();
         //*****
 
         ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR,mG,mB);
@@ -341,8 +344,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void pickImage() {
-        Toast.makeText(getApplicationContext(),"image picker should be implemented",Toast.LENGTH_LONG).show();
-        imagePicker.setImageBitmap(getRoundedShape(bgBMP));
+        Toast.makeText(getApplicationContext(),"image picker should be implemented",Toast.LENGTH_SHORT).show();
 
         // ADD CODE HERE
         // REQUEST INTENT FROM GALLERY TO PICK IMAGE
@@ -350,18 +352,42 @@ public class MainActivity extends AppCompatActivity {
         // IF NECESSARY CONVERT TO BITMAP
         // bgBMP = imported bitmap
 
+        ((GPUImageChromaKeyBlendFilter) chromakey).setBitmap(bgBMP);
+        imagePicker.setImageBitmap(getRoundedShape(bgBMP));
+
     }
 
     private void previewREC() {
-        Toast.makeText(getApplicationContext(),"preview should be implemented",Toast.LENGTH_LONG).show();
+        Toast.makeText(getApplicationContext(),"preview should be implemented",Toast.LENGTH_SHORT).show();
         // ADD CODE HERE
         // LAUNCH INTENT TO SWITCH TO SECOND ACTIVITY
         // CREATE ACTIVITY WITH RECORDED VIDEOS IN IT (IMAGE BUTTON)
         // WHEN USER CLICKS ON ONE LAUNCH INTENT TO PLAY VIDEO
     }
 
+    public void initRecorder(){
+        //ADD CODE HERE
+        //SETUP RECORDER
+        //FORMAT FRAMERATE OUTPUT NAME FOLDER
+        //START RECORDING
+    }
+    public void updateRecorder(){
+        //ADD CODE HERE
+        //ADD BITMAP FRAME TO RECORDER
+    }
+    public void stopRecorder(){
+        //ADD CODE HERE
+        //CLOSE RECORDER
+    }
+
+
+
+
+
+
     //NEXT FUCTIONS
     //lockCamera(); Locks focus WB and exposure
+    //arCore??
 
 
 
