@@ -1,3 +1,3 @@
 # MVP CAMERA
-Using GPUImage Library for Applying Chromakey Filter
+Using GPUImage Library to Apply Chromakey Filter
 "# MVP-Camera" 
