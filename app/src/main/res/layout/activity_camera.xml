@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/camera_container"
+    android:background="@android:color/white"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <jp.co.cyberagent.android.gpuimage.GPUImageView
+        android:id="@+id/gpuimageview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:gpuimage_show_loading="false"
+        app:gpuimage_surface_type="texture_view"
+        app:layout_constraintDimensionRatio="H,16:9"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" >
+
+
+    </jp.co.cyberagent.android.gpuimage.GPUImageView>
+    <!-- Camera control buttons -->
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:id="@+id/fps"
+        android:textColor="@color/white"
+        android:background="@color/black"
+        tools:ignore="MissingConstraints" />
+
+
+    <androidx.coordinatorlayout.widget.CoordinatorLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        >
+
+        <ImageButton
+            android:id="@+id/camera_capture_button"
+            android:layout_width="@dimen/round_button_large"
+            android:layout_height="@dimen/round_button_large"
+            android:layout_centerHorizontal="true"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="0dp"
+            android:background="@drawable/ic_shutter"
+            android:contentDescription="@string/capture_button_alt"
+            android:scaleType="fitCenter"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintLeft_toLeftOf="parent"
+            app:layout_constraintRight_toRightOf="parent"
+            android:layout_marginTop="700dp"
+            app:layout_dodgeInsetEdges="bottom"
+            />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="350dp"
+                app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior"
+                app:behavior_hideable="false"
+                app:behavior_peekHeight="100dp"
+                app:layout_insetEdge="bottom"
+                android:layout_gravity="center_horizontal"
+                android:orientation="vertical">
+
+                <ImageView
+                    android:layout_width="30dp"
+                    android:layout_height="8dp"
+                    android:layout_marginTop="40dp"
+                    android:background="@drawable/seperation"
+                    android:layout_gravity="center_horizontal"
+                    />
+
+            <RelativeLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/ui_controls"
+                >
+
+                <ImageButton
+                    android:id="@+id/IMGpicker"
+                    android:layout_width="100dp"
+                    android:layout_height="100dp"
+                    android:layout_centerHorizontal="true"
+                    android:layout_marginTop="40dp"
+                    android:adjustViewBounds="true"
+                    android:background="@drawable/image_viewer"
+                    app:backgroundTint="@null" />
+
+                <Button
+                    android:id="@+id/previewRecording"
+                    android:layout_width="80dp"
+                    android:layout_height="80dp"
+                    android:layout_alignParentLeft="true"
+                    android:layout_marginLeft="40dp"
+                    android:layout_marginTop="100dp"
+                    android:background="@drawable/rounded_button"
+                    app:backgroundTint="@null" />
+
+
+                <TextView
+                    android:id="@+id/T"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_below="@id/IMGpicker"
+                    android:layout_marginTop="16dp"
+                    android:layout_marginLeft="20dp"
+                    android:layout_toRightOf="@id/previewRecording"
+                    android:text="T"
+                    android:textColor="@color/white" />
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/threshold"
+                    android:layout_width="120dp"
+                    android:layout_height="wrap_content"
+                    android:layout_below="@id/IMGpicker"
+                    android:layout_toRightOf="@id/T"
+                    android:layout_marginTop="4dp"
+                    android:value="0.4"
+                    android:valueFrom="0.2"
+                    android:valueTo="0.5" />
+
+
+                <TextView
+                    android:id="@+id/S"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_below="@id/T"
+                    android:layout_marginLeft="20dp"
+                    android:layout_marginTop="32dp"
+                    android:layout_toRightOf="@id/previewRecording"
+                    android:text="S"
+                    android:textColor="@color/white" />
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/smoothing"
+                    android:layout_width="120dp"
+                    android:layout_height="wrap_content"
+                    android:layout_toRightOf="@id/S"
+                    android:layout_below="@id/threshold"
+                    android:value="0.1"
+                    android:valueFrom="0"
+                    android:valueTo="0.3" />
+
+                <Button
+                    android:layout_width="80dp"
+                    android:layout_height="80dp"
+                    android:id="@+id/COLORpicker"
+                    android:background="@drawable/rounded_button"
+                    android:layout_alignParentRight="true"
+                    android:layout_marginTop="100dp"
+                    android:layout_marginRight="40dp"
+                    app:backgroundTint="@null"
+                    />
+
+
+
+
+
+            </RelativeLayout>
+            </LinearLayout>
+
+
+    </androidx.coordinatorlayout.widget.CoordinatorLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>
