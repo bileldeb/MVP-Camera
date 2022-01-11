@@ -344,17 +344,27 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void pickImage() {
-        Toast.makeText(getApplicationContext(),"image picker should be implemented",Toast.LENGTH_SHORT).show();
+        Intent pickPhoto = new Intent(Intent.ACTION_PICK, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+        startActivityForResult(pickPhoto , 1);
+    }
 
-        // ADD CODE HERE
-        // REQUEST INTENT FROM GALLERY TO PICK IMAGE
-        // RECEIVE IMAGE AFTER USER PICKS AN IMAGE
-        // IF NECESSARY CONVERT TO BITMAP
-        // bgBMP = imported bitmap
+    protected void onActivityResult(int requestCode, int resultCode, Intent imageReturnedIntent) {
+        super.onActivityResult(requestCode, resultCode, imageReturnedIntent);
+                if(resultCode == RESULT_OK){
+                    Uri selectedImage = imageReturnedIntent.getData();
 
-        ((GPUImageChromaKeyBlendFilter) chromakey).setBitmap(bgBMP);
-        imagePicker.setImageBitmap(getRoundedShape(bgBMP));
+                    Bitmap bitmap = null;
+                    try {
+                        bitmap = MediaStore.Images.Media.getBitmap(this.getContentResolver(), selectedImage);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
 
+                    bgBMP = bitmap;
+
+                    ((GPUImageChromaKeyBlendFilter) chromakey).setBitmap(bgBMP);
+                    imagePicker.setImageBitmap(getRoundedShape(bgBMP));
+        }
     }
 
     private void previewREC() {
