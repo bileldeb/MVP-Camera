@@ -55,5 +55,4 @@ dependencies {
     //blurview
     implementation 'com.eightbitlab:blurview:1.6.6'
 
-
 }
