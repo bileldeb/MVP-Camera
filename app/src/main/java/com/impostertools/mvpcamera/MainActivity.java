@@ -6,6 +6,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.camera.core.AspectRatio;
 import androidx.camera.core.Camera;
+import androidx.camera.core.CameraControl;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageProxy;
@@ -58,7 +59,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
-import jp.co.cyberagent.android.gpuimage.GPUImage;
 import jp.co.cyberagent.android.gpuimage.GPUImageView;
 import jp.co.cyberagent.android.gpuimage.filter.GPUImageChromaKeyBlendFilter;
 import jp.co.cyberagent.android.gpuimage.filter.GPUImageFilter;
@@ -76,9 +76,9 @@ public class MainActivity extends AppCompatActivity {
     GPUImageView gpuImageView;
     TextView textView;
     Executor executor;
-    Button colorPicker;
+    ImageButton colorPicker;
     ImageButton imagePicker;
-    Button previewRecording;
+    ImageButton previewRecording;
     Slider threshold;
     Slider smoothing;
     GPUImageFilter chromakey;
@@ -111,42 +111,26 @@ public class MainActivity extends AppCompatActivity {
 
 
 
-
-        //GPUImage paralell = new GPUImage(getApplicationContext());
+        //GPUIMAGE VIEW SETUP
         gpuImageView = findViewById(R.id.gpuimageview);
-        //gpuImageView.setBackgroundColor(R.color.transparent);
         chromakey = new GPUImageChromaKeyBlendFilter();
         gpuImageView.setFilter(chromakey);
         Drawable bgD = AppCompatResources.getDrawable(this, R.drawable.bg);
         bgBMP = ((BitmapDrawable) bgD).getBitmap();
-        //gpuImageView.setImage(bgBMP);
-
-
-
-
-        //blur setup
-        //View decorView = getWindow().getDecorView();
-        //ViewGroup rootView = (ViewGroup) decorView.findViewById(android.R.id.content);
-        //Drawable windowBackground = decorView.getBackground();
-        //background_blur = findViewById(R.id.blur_background);
-        //background_blur.setupWith(rootView)
-        //        .setFrameClearDrawable(windowBackground)
-        //        .setBlurAlgorithm(new RenderScriptBlur(this))
-        //        .setBlurRadius(5f)
-        //        .setBlurAutoUpdate(true);
-        //.setHasFixedTransformationMatrix(true);
-
+        ((GPUImageChromaKeyBlendFilter) chromakey).setBitmap(bgBMP);
 
 
 
 
         //UI CONTROLS
         colorPicker=findViewById(R.id.COLORpicker);
-        colorPicker.setBackgroundTintList(AppCompatResources.getColorStateList(getApplicationContext(), R.color.green));
+        colorPicker.setBackgroundTintList(AppCompatResources.getColorStateList(getApplicationContext(), R.color.white));
         colorPicker.setOnClickListener(new View.OnClickListener() {
             @RequiresApi(api = Build.VERSION_CODES.O)
             @Override
             public void onClick(View view) {
+                threshold.setValue(0);
+                smoothing.setValue(0);
                 pickColor();
             }
         });
@@ -321,7 +305,8 @@ public class MainActivity extends AppCompatActivity {
         cameraProvider.unbindAll();
         Camera camera = cameraProvider.bindToLifecycle((LifecycleOwner)this,
                 cameraSelector, imageAnalysis);
-
+        CameraControl cameraControl = camera.getCameraControl();
+        cameraControl.setLinearZoom(0.9F);
     }
 
 
@@ -344,6 +329,8 @@ public class MainActivity extends AppCompatActivity {
                 mB = c.blue();
                 ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR,mG,mB);
                 colorPicker.setBackgroundTintList(ColorStateList.valueOf(Color.rgb(mR,mG,mB)));
+                smoothing.setValue((float) 0.1);
+                threshold.setValue((float) 0.05);
                 gpuImageView.setOnTouchListener(null);
                 return false;
             }
@@ -374,6 +361,11 @@ public class MainActivity extends AppCompatActivity {
                     ((GPUImageChromaKeyBlendFilter) chromakey).setBitmap(bgBMP);
                     gpuImageView.setFilter(chromakey);
 
+                    ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR,mG,mB);
+                    ((GPUImageChromaKeyBlendFilter) chromakey).setThresholdSensitivity(mChromaThreshold);
+                    ((GPUImageChromaKeyBlendFilter) chromakey).setSmoothing(mSmoothing);
+
+
                     imagePicker.setImageBitmap(getRoundedShape(bgBMP));
         }
     }
@@ -386,12 +378,6 @@ public class MainActivity extends AppCompatActivity {
         // WHEN USER CLICKS ON ONE LAUNCH INTENT TO PLAY VIDEO
     }
 
-    public void initRecorder(){
-        //ADD CODE HERE
-        //SETUP RECORDER
-        //FORMAT FRAMERATE OUTPUT NAME FOLDER
-        //START RECORDING
-    }
     public void updateRecorder(){
         //ADD CODE HERE
         //ADD BITMAP FRAME TO RECORDER

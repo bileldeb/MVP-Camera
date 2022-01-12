@@ -39,8 +39,8 @@
 
         <ImageButton
             android:id="@+id/camera_capture_button"
-            android:layout_width="@dimen/round_button_large"
-            android:layout_height="@dimen/round_button_large"
+            android:layout_width="70dp"
+            android:layout_height="70dp"
             android:layout_centerHorizontal="true"
             android:layout_gravity="center_horizontal"
             android:layout_marginBottom="0dp"
@@ -53,6 +53,7 @@
             android:layout_marginTop="700dp"
             app:layout_dodgeInsetEdges="bottom"
             />
+
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -89,14 +90,15 @@
                     android:background="@drawable/image_viewer"
                     app:backgroundTint="@null" />
 
-                <Button
+                <ImageButton
                     android:id="@+id/previewRecording"
-                    android:layout_width="80dp"
-                    android:layout_height="80dp"
+                    android:layout_width="70dp"
+                    android:layout_height="70dp"
                     android:layout_alignParentLeft="true"
-                    android:layout_marginLeft="40dp"
-                    android:layout_marginTop="100dp"
+                    android:layout_marginLeft="50dp"
+                    android:layout_marginTop="120dp"
                     android:background="@drawable/rounded_button"
+                    android:src="@drawable/play"
                     app:backgroundTint="@null" />
 
 
@@ -118,9 +120,9 @@
                     android:layout_below="@id/IMGpicker"
                     android:layout_toRightOf="@id/T"
                     android:layout_marginTop="4dp"
-                    android:value="0.4"
-                    android:valueFrom="0.2"
-                    android:valueTo="0.5" />
+                    android:value="0"
+                    android:valueFrom="0"
+                    android:valueTo="0.4" />
 
 
                 <TextView
@@ -140,20 +142,20 @@
                     android:layout_height="wrap_content"
                     android:layout_toRightOf="@id/S"
                     android:layout_below="@id/threshold"
-                    android:value="0.1"
+                    android:value="0"
                     android:valueFrom="0"
                     android:valueTo="0.3" />
 
-                <Button
-                    android:layout_width="80dp"
-                    android:layout_height="80dp"
+                <ImageButton
                     android:id="@+id/COLORpicker"
-                    android:background="@drawable/rounded_button"
+                    android:layout_width="70dp"
+                    android:layout_height="70dp"
                     android:layout_alignParentRight="true"
-                    android:layout_marginTop="100dp"
-                    android:layout_marginRight="40dp"
-                    app:backgroundTint="@null"
-                    />
+                    android:layout_marginTop="120dp"
+                    android:layout_marginRight="50dp"
+                    android:background="@drawable/rounded_button"
+                    android:src="@drawable/eyedropper"
+                    app:backgroundTint="@null" />
 
 
 
