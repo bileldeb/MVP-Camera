@@ -362,7 +362,10 @@ public class MainActivity extends AppCompatActivity {
 
                     bgBMP = bitmap;
 
+                    chromakey = new GPUImageChromaKeyBlendFilter();
                     ((GPUImageChromaKeyBlendFilter) chromakey).setBitmap(bgBMP);
+                    gpuImageView.setFilter(chromakey);
+                    
                     imagePicker.setImageBitmap(getRoundedShape(bgBMP));
         }
     }
