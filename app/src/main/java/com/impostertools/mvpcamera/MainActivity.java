@@ -90,7 +90,7 @@ public class MainActivity extends AppCompatActivity {
     float mR;
     float mG;
     float mB;
-
+    
     Random random = new Random();
 
 
@@ -153,6 +153,7 @@ public class MainActivity extends AppCompatActivity {
 
         threshold=findViewById(R.id.threshold);
         smoothing=findViewById(R.id.smoothing);
+
 
 
 
@@ -306,7 +307,7 @@ public class MainActivity extends AppCompatActivity {
         Camera camera = cameraProvider.bindToLifecycle((LifecycleOwner)this,
                 cameraSelector, imageAnalysis);
         CameraControl cameraControl = camera.getCameraControl();
-        cameraControl.setLinearZoom(0.9F);
+        // cameraControl.setLinearZoom(0.9F);
     }
 
 
@@ -378,6 +379,12 @@ public class MainActivity extends AppCompatActivity {
         // WHEN USER CLICKS ON ONE LAUNCH INTENT TO PLAY VIDEO
     }
 
+    public void initRecorder(){
+        //ADD CODE HERE
+        //SETUP RECORDER
+        //FORMAT FRAMERATE OUTPUT NAME FOLDER
+        //START RECORDING
+    }
     public void updateRecorder(){
         //ADD CODE HERE
         //ADD BITMAP FRAME TO RECORDER
