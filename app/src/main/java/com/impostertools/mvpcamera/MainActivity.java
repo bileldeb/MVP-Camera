@@ -32,9 +32,7 @@ import android.graphics.Rect;
 import android.graphics.YuvImage;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
-import android.media.CamcorderProfile;
 import android.media.Image;
-import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -42,7 +40,7 @@ import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.util.Size;
 import android.view.Display;
-import android.view.SurfaceHolder;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageButton;
@@ -60,6 +58,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
+import jp.co.cyberagent.android.gpuimage.GPUImage;
 import jp.co.cyberagent.android.gpuimage.GPUImageView;
 import jp.co.cyberagent.android.gpuimage.filter.GPUImageChromaKeyBlendFilter;
 import jp.co.cyberagent.android.gpuimage.filter.GPUImageFilter;
@@ -84,9 +83,6 @@ public class MainActivity extends AppCompatActivity {
     Slider smoothing;
     GPUImageFilter chromakey;
 
-    MediaRecorder recorder;
-    SurfaceHolder holder;
-
     Bitmap bgBMP;
 
     float mChromaThreshold= (float) 0.3;
@@ -94,14 +90,13 @@ public class MainActivity extends AppCompatActivity {
     float mR;
     float mG;
     float mB;
-    
+
     Random random = new Random();
 
 
     Matrix mat = new Matrix();
     int rotDeg = 1;
     private long mLastAnalysisResultTime;
-    boolean recording = false;
 
     @SuppressLint("ResourceAsColor")
     @Override
@@ -114,7 +109,6 @@ public class MainActivity extends AppCompatActivity {
         textView = findViewById(R.id.fps);
         camera_capture_button = findViewById(R.id.camera_capture_button);
 
-        recorder = new MediaRecorder();
 
 
 
@@ -178,23 +172,14 @@ public class MainActivity extends AppCompatActivity {
 
 
 
+
+
         executor = Executors.newSingleThreadExecutor();
         camera_capture_button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
             Toast.makeText(getApplicationContext(), "Recording must be implemented",Toast.LENGTH_SHORT).show();
-                if (recording) {
-                    recorder.stop();
-                    recording = false;
-                    initRecorder();
-                    //prepareRecorder();
-                    //Prepare Recorder function controls the view
-                } else {
-                    recording = true;
-                    recorder.start();
-                }
             }
-
             // ADD CODE HERE
             // CHECK RECORDING STATUS AND CALL EITHER initRecorder() or stopRecorder()
 
@@ -203,21 +188,10 @@ public class MainActivity extends AppCompatActivity {
 
         if(checkPermission()) {
             startCamera();
-            initRecorder();
         }
     }
 
-    private void initRecorder(){
-        //recorder.setAudioSource(MediaRecorder.AudioSource.DEFAULT);
-        recorder.setVideoSource(MediaRecorder.VideoSource.DEFAULT);
 
-        CamcorderProfile cpHigh = CamcorderProfile
-                .get(CamcorderProfile.QUALITY_HIGH);
-        recorder.setProfile(cpHigh);
-        recorder.setOutputFile("/sdcard/videocapture_example.mp4");
-        recorder.setMaxDuration(50000); // 50 seconds
-        recorder.setMaxFileSize(5000000); // Approximately 5 megabytes
-    }
 
     private boolean checkPermission() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
@@ -399,7 +373,7 @@ public class MainActivity extends AppCompatActivity {
                     chromakey = new GPUImageChromaKeyBlendFilter();
                     ((GPUImageChromaKeyBlendFilter) chromakey).setBitmap(bgBMP);
                     gpuImageView.setFilter(chromakey);
-                    
+
                     imagePicker.setImageBitmap(getRoundedShape(bgBMP));
         }
     }
@@ -412,6 +386,12 @@ public class MainActivity extends AppCompatActivity {
         // WHEN USER CLICKS ON ONE LAUNCH INTENT TO PLAY VIDEO
     }
 
+    public void initRecorder(){
+        //ADD CODE HERE
+        //SETUP RECORDER
+        //FORMAT FRAMERATE OUTPUT NAME FOLDER
+        //START RECORDING
+    }
     public void updateRecorder(){
         //ADD CODE HERE
         //ADD BITMAP FRAME TO RECORDER
