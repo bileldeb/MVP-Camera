@@ -324,23 +324,27 @@ public class MainActivity extends AppCompatActivity {
 
     @RequiresApi(api = Build.VERSION_CODES.O)
     private void pickColor() {
-
-        // ADD CODE HERE
-        // WHEN USER CLICKS ON BUTTON WAIT UNTIL HE CLICKS ON THE GPUIMAGE VIEW
-        // GET CLICK LOCATION
-        // GET PIXEL FROM VIEW AT THAT LOCATION
-        // SEPERATE IT TO mR mG mB
-        //USE https://www.youtube.com/watch?v=QCRPBGthMb4 FOR REFERENCE
-
-        // ***** THIS CAN BE DELETED
-        mR = random.nextFloat();
-        mG = random.nextFloat();
-        mB = random.nextFloat();
-        Toast.makeText(getApplicationContext(),"color picker should be implemented",Toast.LENGTH_SHORT).show();
-        //*****
-
-        ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR,mG,mB);
-        colorPicker.setBackgroundTintList(ColorStateList.valueOf(Color.rgb(mR,mG,mB)));
+        gpuImageView.setOnTouchListener(new View.OnTouchListener() {
+            @RequiresApi(api = Build.VERSION_CODES.Q)
+            @Override
+            public boolean onTouch(View view, MotionEvent motionEvent) {
+                Bitmap current = null;
+                try {
+                    current = gpuImageView.capture();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+               Color c = current.getColor((int)motionEvent.getX(), (int)motionEvent.getY());
+                mR = c.red();
+                mG = c.green();
+                mB = c.blue();
+                ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR,mG,mB);
+                colorPicker.setBackgroundTintList(ColorStateList.valueOf(Color.rgb(mR,mG,mB)));
+                gpuImageView.setOnTouchListener(null);
+                return false;
+            }
+        });
+        Toast.makeText(getApplicationContext(),"Please press on the colour",Toast.LENGTH_SHORT).show();
     }
 
     private void pickImage() {
