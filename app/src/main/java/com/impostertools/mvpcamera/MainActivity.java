@@ -43,7 +43,6 @@ import android.util.Size;
 import android.view.Display;
 import android.view.MotionEvent;
 import android.view.View;
-import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -51,9 +50,15 @@ import android.widget.Toast;
 import com.google.android.material.slider.Slider;
 import com.google.common.util.concurrent.ListenableFuture;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -82,6 +87,8 @@ public class MainActivity extends AppCompatActivity {
     Slider threshold;
     Slider smoothing;
     GPUImageFilter chromakey;
+    //TODO how to sprecifiy path??
+    String videoPath = "path";
 
     Bitmap bgBMP;
 
@@ -90,9 +97,10 @@ public class MainActivity extends AppCompatActivity {
     float mR;
     float mG;
     float mB;
-    
-    Random random = new Random();
 
+    boolean isRecording = false;
+    ByteArrayOutputStream stream = new ByteArrayOutputStream();
+    Random random = new Random();
 
     Matrix mat = new Matrix();
     int rotDeg = 1;
@@ -163,7 +171,7 @@ public class MainActivity extends AppCompatActivity {
         camera_capture_button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-            Toast.makeText(getApplicationContext(), "Recording must be implemented",Toast.LENGTH_SHORT).show();
+                Toast.makeText(getApplicationContext(), "Recording must be implemented",Toast.LENGTH_SHORT).show();
             }
             // ADD CODE HERE
             // CHECK RECORDING STATUS AND CALL EITHER initRecorder() or stopRecorder()
@@ -272,11 +280,11 @@ public class MainActivity extends AppCompatActivity {
 
                 Bitmap frame = toBitmap(imagine,mat);
                 gpuImageView.setImage(frame);
-                //gpuImageView.setRotation(rotDeg);
 
-                // ADD CODE HERE
-                // USE gpuImageView.capture() TO RETRIEVE CURRENT DISPLAYED FRAME WITH EFFECTS APPLIED AS BITMAP
-                // PASS IT TO THE RECORDING FUNCTION updateRecorder(...)
+                if(isRecording){
+                    updateRecorder(frame);
+                }
+                //gpuImageView.setRotation(rotDeg);
 
 
                 if(SystemClock.elapsedRealtime() - mLastAnalysisResultTime < 500) {
@@ -324,7 +332,7 @@ public class MainActivity extends AppCompatActivity {
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
-               Color c = current.getColor((int)motionEvent.getX(), (int)motionEvent.getY());
+                Color c = current.getColor((int)motionEvent.getX(), (int)motionEvent.getY());
                 mR = c.red();
                 mG = c.green();
                 mB = c.blue();
@@ -346,28 +354,28 @@ public class MainActivity extends AppCompatActivity {
 
     protected void onActivityResult(int requestCode, int resultCode, Intent imageReturnedIntent) {
         super.onActivityResult(requestCode, resultCode, imageReturnedIntent);
-                if(resultCode == RESULT_OK){
-                    Uri selectedImage = imageReturnedIntent.getData();
+        if(resultCode == RESULT_OK){
+            Uri selectedImage = imageReturnedIntent.getData();
 
-                    Bitmap bitmap = null;
-                    try {
-                        bitmap = MediaStore.Images.Media.getBitmap(this.getContentResolver(), selectedImage);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
+            Bitmap bitmap = null;
+            try {
+                bitmap = MediaStore.Images.Media.getBitmap(this.getContentResolver(), selectedImage);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
 
-                    bgBMP = bitmap;
+            bgBMP = bitmap;
 
-                    chromakey = new GPUImageChromaKeyBlendFilter();
-                    ((GPUImageChromaKeyBlendFilter) chromakey).setBitmap(bgBMP);
-                    gpuImageView.setFilter(chromakey);
+            chromakey = new GPUImageChromaKeyBlendFilter();
+            ((GPUImageChromaKeyBlendFilter) chromakey).setBitmap(bgBMP);
+            gpuImageView.setFilter(chromakey);
 
-                    ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR,mG,mB);
-                    ((GPUImageChromaKeyBlendFilter) chromakey).setThresholdSensitivity(mChromaThreshold);
-                    ((GPUImageChromaKeyBlendFilter) chromakey).setSmoothing(mSmoothing);
+            ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR,mG,mB);
+            ((GPUImageChromaKeyBlendFilter) chromakey).setThresholdSensitivity(mChromaThreshold);
+            ((GPUImageChromaKeyBlendFilter) chromakey).setSmoothing(mSmoothing);
 
 
-                    imagePicker.setImageBitmap(getRoundedShape(bgBMP));
+            imagePicker.setImageBitmap(getRoundedShape(bgBMP));
         }
     }
 
@@ -379,20 +387,46 @@ public class MainActivity extends AppCompatActivity {
         // WHEN USER CLICKS ON ONE LAUNCH INTENT TO PLAY VIDEO
     }
 
-    public void initRecorder(){
-        //ADD CODE HERE
-        //SETUP RECORDER
-        //FORMAT FRAMERATE OUTPUT NAME FOLDER
-        //START RECORDING
+    public void startRecording(){
+
+        //if recording is not complete yet then prevent the stream from getting cleared
+        if(isRecording){
+            return;
+        }
+        this.stream.reset();
+        isRecording = true;
     }
-    public void updateRecorder(){
-        //ADD CODE HERE
-        //ADD BITMAP FRAME TO RECORDER
+    public void updateRecorder(Bitmap frame){
+        //compresses bitmap to png format and adds it to the bytearray
+        frame.compress(Bitmap.CompressFormat.PNG, 100, stream);
     }
-    public void stopRecorder(){
-        //ADD CODE HERE
-        //CLOSE RECORDER
-    }
+    public void stopRecording(){
+        isRecording = false;
+        new Thread (){
+            @Override
+            public void run() {
+                super.run();
+                try {
+                    @SuppressWarnings("resource")
+                    FileInputStream v_input = new FileInputStream(videoPath);
+                    ByteArrayOutputStream objByteArrayOS = new ByteArrayOutputStream();
+                    byte[] byteBufferString = new byte[1024];
+                    for (int readNum; (readNum = v_input.read(byteBufferString)) != -1;)
+                    {
+                        objByteArrayOS.write(byteBufferString, 0, readNum);
+                        System.out.println("read " + readNum + " bytes,");
+                    }
+                    //TODO
+                    //Object videodata = Base64.encodeBytes(byteBufferString);//Base64.encodeToString(objByteArrayOS.toByteArray(), Base64.DEFAULT);
+
+                } catch (FileNotFoundException e) {
+                    e.printStackTrace();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            };
+
+    };
 
 
 
