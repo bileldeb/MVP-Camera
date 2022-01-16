@@ -409,15 +409,7 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     @SuppressWarnings("resource")
                     FileInputStream v_input = new FileInputStream(videoPath);
-                    ByteArrayOutputStream objByteArrayOS = new ByteArrayOutputStream();
-                    byte[] byteBufferString = new byte[1024];
-                    for (int readNum; (readNum = v_input.read(byteBufferString)) != -1;)
-                    {
-                        objByteArrayOS.write(byteBufferString, 0, readNum);
-                        System.out.println("read " + readNum + " bytes,");
-                    }
-                    //TODO
-                    //Object videodata = Base64.encodeBytes(byteBufferString);//Base64.encodeToString(objByteArrayOS.toByteArray(), Base64.DEFAULT);
+                    Object videodata = Base64.encodeToString(stream.toByteArray(), Base64.DEFAULT);
 
                 } catch (FileNotFoundException e) {
                     e.printStackTrace();
