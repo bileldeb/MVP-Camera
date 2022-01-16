@@ -409,7 +409,8 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     @SuppressWarnings("resource")
                     FileInputStream v_input = new FileInputStream(videoPath);
-                    Object videodata = Base64.encodeToString(stream.toByteArray(), Base64.DEFAULT);
+                    //TODO:
+                    //Object videodata = Base64.encodeToString(stream.toByteArray(), Base64.DEFAULT);
 
                 } catch (FileNotFoundException e) {
                     e.printStackTrace();
