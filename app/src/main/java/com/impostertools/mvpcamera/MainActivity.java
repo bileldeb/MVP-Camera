@@ -2,11 +2,13 @@ package com.impostertools.mvpcamera;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.camera.core.AspectRatio;
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraControl;
+import androidx.camera.core.CameraInfo;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageProxy;
@@ -18,7 +20,10 @@ import androidx.core.content.ContextCompat;
 import androidx.lifecycle.LifecycleOwner;
 
 import android.Manifest;
+import android.animation.TimeInterpolator;
+import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
@@ -29,6 +34,7 @@ import android.graphics.Color;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.Path;
+import android.graphics.Picture;
 import android.graphics.Rect;
 import android.graphics.YuvImage;
 import android.graphics.drawable.BitmapDrawable;
@@ -37,28 +43,39 @@ import android.media.Image;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.SystemClock;
 import android.provider.MediaStore;
+import android.provider.Settings;
+import android.util.Log;
 import android.util.Size;
 import android.view.Display;
+import android.view.DragEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
+import com.google.android.material.slider.LabelFormatter;
 import com.google.android.material.slider.Slider;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Date;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Locale;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -73,20 +90,29 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = MainActivity.class.getSimpleName();
 
     private static final int REQUEST_CODE_CAMERA_PERMISSION = 200;
-    private static final String[] PERMISSIONS = {Manifest.permission.CAMERA};
+    private static final String[] PERMISSIONS = {Manifest.permission.CAMERA,Manifest.permission.READ_EXTERNAL_STORAGE};
+    private static final int REQUEST_CODE_READ_STORAGE = 300;
+
 
 
     ConstraintLayout container;
+    LinearLayout dynamicSlider;
+    LinearLayout bottomSheet;
     ImageButton camera_capture_button;
     GPUImageView gpuImageView;
-    TextView textView;
     Executor executor;
     ImageButton colorPicker;
     ImageButton imagePicker;
     ImageButton previewRecording;
     Slider threshold;
     Slider smoothing;
+    Slider zoom;
     GPUImageFilter chromakey;
+    BottomSheetBehavior<LinearLayout> bottomSheetBehavior;
+
+    CameraControl cameraControl;
+    CameraInfo cameraInfo;
+
     //TODO how to sprecifiy path??
     String videoPath = "path";
 
@@ -100,13 +126,12 @@ public class MainActivity extends AppCompatActivity {
 
     boolean isRecording = false;
     ByteArrayOutputStream stream = new ByteArrayOutputStream();
-    Random random = new Random();
 
     Matrix mat = new Matrix();
     int rotDeg = 1;
     private long mLastAnalysisResultTime;
 
-    @SuppressLint("ResourceAsColor")
+    @SuppressLint({"ResourceAsColor", "ClickableViewAccessibility"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
 
@@ -114,8 +139,84 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_camera);
         container = findViewById(R.id.camera_container);
-        textView = findViewById(R.id.fps);
         camera_capture_button = findViewById(R.id.camera_capture_button);
+
+
+        bottomSheet = findViewById(R.id.bottomSheetGroup);
+        bottomSheetBehavior = BottomSheetBehavior.from(bottomSheet);
+        bottomSheetBehavior.setHideable(false);
+        bottomSheetBehavior.setPeekHeight(getResources().getDimensionPixelSize(R.dimen.peekHeight),true);
+
+        dynamicSlider = findViewById(R.id.dynamicSlider);
+        LinearLayout.LayoutParams layoutParams = (LinearLayout.LayoutParams) dynamicSlider.getLayoutParams();
+
+
+        zoom = findViewById(R.id.zoom);
+        zoom.setLabelFormatter(new LabelFormatter() {
+            @NonNull
+            @Override
+            public String getFormattedValue(float value) {
+                value=value*9.3f +0.7f;
+                //return String.format(Locale.US, "%.1f", value)+ 'x';
+                return String.format(Locale.US, "%.1f", cameraInfo.getZoomState().getValue().getZoomRatio())+ 'x';
+            }
+        });
+
+                ValueAnimator longerSlider = ValueAnimator.ofInt(getResources().getDimensionPixelSize(R.dimen.shortZoomSlider), getResources().getDimensionPixelSize(R.dimen.longZoomSlider));
+                longerSlider.setDuration(200);
+                ValueAnimator shorterSlider = ValueAnimator.ofInt(getResources().getDimensionPixelSize(R.dimen.longZoomSlider), getResources().getDimensionPixelSize(R.dimen.shortZoomSlider));
+                shorterSlider.setDuration(100);
+                shorterSlider.setStartDelay(20);
+                longerSlider.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                    @Override
+                    public void onAnimationUpdate(ValueAnimator valueAnimator) {
+                        layoutParams.width = (int) valueAnimator.getAnimatedValue();
+                        dynamicSlider.setLayoutParams(layoutParams);
+                    }
+                });
+                shorterSlider.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                    @Override
+                    public void onAnimationUpdate(ValueAnimator valueAnimator) {
+                        layoutParams.width = (int) valueAnimator.getAnimatedValue();
+                        dynamicSlider.setLayoutParams(layoutParams);
+                    }
+                });
+
+        zoom.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View view, MotionEvent motionEvent) {
+                    if ((motionEvent.getAction() == MotionEvent.ACTION_DOWN))  {
+                        shorterSlider.end();
+                        longerSlider.start();
+                    }
+                    if ((motionEvent.getAction() == MotionEvent.ACTION_UP) || (motionEvent.getAction() == MotionEvent.ACTION_CANCEL) ) {
+                        longerSlider.end();
+                        shorterSlider.start();
+                    }
+
+                return false;
+            }
+        });
+
+
+        threshold = findViewById(R.id.threshold);
+        threshold.setLabelFormatter(new LabelFormatter() {
+            @NonNull
+            @Override
+            public String getFormattedValue(float value) {
+                return "Threshold: " + String.format(Locale.US, "%.2f", value);
+            }
+        });
+
+
+        smoothing = findViewById(R.id.smoothing);
+        smoothing.setLabelFormatter(new LabelFormatter() {
+            @NonNull
+            @Override
+            public String getFormattedValue(float value) {
+                return "Smoothing: " + String.format(Locale.US, "%.2f", value);
+            }
+        });
 
 
 
@@ -130,6 +231,8 @@ public class MainActivity extends AppCompatActivity {
 
 
 
+
+
         //UI CONTROLS
         colorPicker=findViewById(R.id.COLORpicker);
         colorPicker.setBackgroundTintList(AppCompatResources.getColorStateList(getApplicationContext(), R.color.white));
@@ -139,6 +242,8 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View view) {
                 threshold.setValue(0);
                 smoothing.setValue(0);
+                bottomSheetBehavior.setHideable(true);
+                bottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
                 pickColor();
             }
         });
@@ -159,8 +264,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        threshold=findViewById(R.id.threshold);
-        smoothing=findViewById(R.id.smoothing);
+
 
 
 
@@ -172,10 +276,13 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 Toast.makeText(getApplicationContext(), "Recording must be implemented",Toast.LENGTH_SHORT).show();
+                startRecording();
+                if(isRecording){
+                    stopRecording();
+                }
             }
             // ADD CODE HERE
             // CHECK RECORDING STATUS AND CALL EITHER initRecorder() or stopRecorder()
-
         });
 
 
@@ -183,6 +290,7 @@ public class MainActivity extends AppCompatActivity {
             startCamera();
         }
     }
+
 
 
 
@@ -195,6 +303,16 @@ public class MainActivity extends AppCompatActivity {
                     REQUEST_CODE_CAMERA_PERMISSION);
             return false;
         }
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(
+                    this,
+                    PERMISSIONS,
+                    REQUEST_CODE_READ_STORAGE);
+            return false;
+        }
+
         // ADD CODE HERE
         // RECORDING WITH AUDIO ADD AUDIO PERMISSION IN MANIFEST AND COMPLETE CHECK PERMISSION TO INCLUDE AUDIO
         return true;
@@ -202,6 +320,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+
         if (requestCode == REQUEST_CODE_CAMERA_PERMISSION) {
             if (grantResults[0] == PackageManager.PERMISSION_DENIED) {
                 Toast.makeText(
@@ -214,7 +333,22 @@ public class MainActivity extends AppCompatActivity {
                 startCamera();
             }
         }
+        if (requestCode == REQUEST_CODE_READ_STORAGE) {
+            if (grantResults[0] == PackageManager.PERMISSION_DENIED) {
+                Toast.makeText(
+                        this,
+                        "Ymission",
+                        Toast.LENGTH_LONG)
+                        .show();
+                finish();
+            } else {
+                startCamera();
+            }
+        }
+
     }
+
+
 
     private void startCamera() {
 
@@ -275,6 +409,8 @@ public class MainActivity extends AppCompatActivity {
                 mSmoothing= smoothing.getValue();
                 ((GPUImageChromaKeyBlendFilter) chromakey).setSmoothing(mSmoothing);
 
+                cameraControl.setLinearZoom(zoom.getValue());
+
 
 
 
@@ -282,7 +418,11 @@ public class MainActivity extends AppCompatActivity {
                 gpuImageView.setImage(frame);
 
                 if(isRecording){
-                    updateRecorder(frame);
+                    try {
+                        updateRecorder(gpuImageView.capture());
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                 }
                 //gpuImageView.setRotation(rotDeg);
 
@@ -295,14 +435,7 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        long duration = SystemClock.elapsedRealtime() - mLastAnalysisResultTime;
-                        double fps;
-
-                        if(duration > 0)
-                            fps = 1000.f / duration;
-                        else
-                            fps = 1000.f;
-                        textView.setText("Threshold = " + String.valueOf(mChromaThreshold) + "     |      Smoothing = " + String.valueOf(mSmoothing));
+                        //Run On UI
                     }
                 });
 
@@ -314,14 +447,16 @@ public class MainActivity extends AppCompatActivity {
         cameraProvider.unbindAll();
         Camera camera = cameraProvider.bindToLifecycle((LifecycleOwner)this,
                 cameraSelector, imageAnalysis);
-        CameraControl cameraControl = camera.getCameraControl();
-        // cameraControl.setLinearZoom(0.9F);
+        cameraControl = camera.getCameraControl();
+        cameraInfo = camera.getCameraInfo();
     }
 
 
 
+    @SuppressLint("ClickableViewAccessibility")
     @RequiresApi(api = Build.VERSION_CODES.O)
     private void pickColor() {
+        Toast.makeText(getApplicationContext(),"Pick a color",Toast.LENGTH_SHORT).show();
         gpuImageView.setOnTouchListener(new View.OnTouchListener() {
             @RequiresApi(api = Build.VERSION_CODES.Q)
             @Override
@@ -332,19 +467,20 @@ public class MainActivity extends AppCompatActivity {
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
-                Color c = current.getColor((int)motionEvent.getX(), (int)motionEvent.getY());
+               Color c = current.getColor((int)motionEvent.getX(), (int)motionEvent.getY());
                 mR = c.red();
                 mG = c.green();
                 mB = c.blue();
                 ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR,mG,mB);
                 colorPicker.setBackgroundTintList(ColorStateList.valueOf(Color.rgb(mR,mG,mB)));
+                bottomSheetBehavior.setHideable(false);
+                bottomSheetBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
                 smoothing.setValue((float) 0.1);
                 threshold.setValue((float) 0.05);
                 gpuImageView.setOnTouchListener(null);
                 return false;
             }
         });
-        Toast.makeText(getApplicationContext(),"Please press on the colour",Toast.LENGTH_SHORT).show();
     }
 
     private void pickImage() {
@@ -354,37 +490,40 @@ public class MainActivity extends AppCompatActivity {
 
     protected void onActivityResult(int requestCode, int resultCode, Intent imageReturnedIntent) {
         super.onActivityResult(requestCode, resultCode, imageReturnedIntent);
-        if(resultCode == RESULT_OK){
-            Uri selectedImage = imageReturnedIntent.getData();
+                if(resultCode == RESULT_OK){
+                    Uri selectedImage = imageReturnedIntent.getData();
 
-            Bitmap bitmap = null;
-            try {
-                bitmap = MediaStore.Images.Media.getBitmap(this.getContentResolver(), selectedImage);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+                    Bitmap bitmap = null;
+                    try {
+                        bitmap = MediaStore.Images.Media.getBitmap(this.getContentResolver(), selectedImage);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
 
-            bgBMP = bitmap;
+                    bgBMP = bitmap;
 
-            chromakey = new GPUImageChromaKeyBlendFilter();
-            ((GPUImageChromaKeyBlendFilter) chromakey).setBitmap(bgBMP);
-            gpuImageView.setFilter(chromakey);
+                    chromakey = new GPUImageChromaKeyBlendFilter();
+                    ((GPUImageChromaKeyBlendFilter) chromakey).setBitmap(bgBMP);
+                    gpuImageView.setFilter(chromakey);
 
-            ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR,mG,mB);
-            ((GPUImageChromaKeyBlendFilter) chromakey).setThresholdSensitivity(mChromaThreshold);
-            ((GPUImageChromaKeyBlendFilter) chromakey).setSmoothing(mSmoothing);
+                    ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR,mG,mB);
+                    ((GPUImageChromaKeyBlendFilter) chromakey).setThresholdSensitivity(mChromaThreshold);
+                    ((GPUImageChromaKeyBlendFilter) chromakey).setSmoothing(mSmoothing);
 
 
-            imagePicker.setImageBitmap(getRoundedShape(bgBMP));
+                    imagePicker.setImageBitmap(getRoundedShape(bgBMP));
         }
     }
 
     private void previewREC() {
-        Toast.makeText(getApplicationContext(),"preview should be implemented",Toast.LENGTH_SHORT).show();
-        // ADD CODE HERE
-        // LAUNCH INTENT TO SWITCH TO SECOND ACTIVITY
-        // CREATE ACTIVITY WITH RECORDED VIDEOS IN IT (IMAGE BUTTON)
-        // WHEN USER CLICKS ON ONE LAUNCH INTENT TO PLAY VIDEO
+        Toast.makeText(getApplicationContext(),"partially implemented",Toast.LENGTH_SHORT).show();
+        /*
+        //this should work if we fix the issue with the file path
+        Intent intent = new Intent();
+        intent.setAction(Intent.ACTION_VIEW);
+        intent.setDataAndType(Uri.fromFile(new File(videoPath);
+        startActivity(intent);
+        */
     }
 
     public void startRecording(){
@@ -396,6 +535,8 @@ public class MainActivity extends AppCompatActivity {
         this.stream.reset();
         isRecording = true;
     }
+
+
     public void updateRecorder(Bitmap frame){
         //compresses bitmap to png format and adds it to the bytearray
         frame.compress(Bitmap.CompressFormat.PNG, 100, stream);
@@ -408,18 +549,18 @@ public class MainActivity extends AppCompatActivity {
                 super.run();
                 try {
                     @SuppressWarnings("resource")
-                    FileInputStream v_input = new FileInputStream(videoPath);
+                    FileInputStream v_input = new FileInputStream("/storage/emulated/0/Android/data/com.impostertools.mvpcamera/files/MVPCamera/");
                     //TODO:
                     //Object videodata = Base64.encodeToString(stream.toByteArray(), Base64.DEFAULT);
-
                 } catch (FileNotFoundException e) {
                     e.printStackTrace();
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
-            };
+            }
 
-    };
+        };
+    }
 
 
 
@@ -482,7 +623,6 @@ public class MainActivity extends AppCompatActivity {
 
         //rotation
         bmp = Bitmap.createBitmap(bmp, 0, 0, bmp.getWidth(), bmp.getHeight(), mat, true);
-
 
         return bmp ;
     }

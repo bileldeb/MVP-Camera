@@ -10,8 +10,8 @@
     <color name="green">#FF00FF00</color>
     <color name="blue">#FF0000FF</color>
     <color name="transparent">#00FFFFFF</color>
-    <color name="UIcontainers">#70000000</color>
-    <color name="UIbuttons">#A9FFFFFF</color>
+    <color name="UIcontainers">#A1000000</color>
+    <color name="UIbuttons">#63FFFFFF</color>
     <color name="UIstroke">#DAFFFFFF</color>
     <color name="picked_color">#1CCA09</color>
 </resources>

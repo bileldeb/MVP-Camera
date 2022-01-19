@@ -15,4 +15,8 @@
     <dimen name="round_button_large">92dp</dimen>
 
     <dimen name="shutter_button_margin">20dp</dimen>
+    <dimen name="peekHeight">100dp</dimen>
+    <dimen name="longZoomSlider">200dp</dimen>
+    <dimen name="shortZoomSlider">60dp</dimen>
+
 </resources>
