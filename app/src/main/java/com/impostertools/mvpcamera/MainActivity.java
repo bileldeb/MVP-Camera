@@ -1,8 +1,37 @@
 package com.impostertools.mvpcamera;
+import android.Manifest;
+import android.animation.ValueAnimator;
+import android.annotation.SuppressLint;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.ImageFormat;
+import android.graphics.Matrix;
+import android.graphics.Path;
+import android.graphics.Rect;
+import android.graphics.YuvImage;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
+import android.media.Image;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.SystemClock;
+import android.provider.MediaStore;
+import android.util.Size;
+import android.view.Display;
+import android.view.MotionEvent;
+import android.view.View;
+import android.widget.ImageButton;
+import android.widget.LinearLayout;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
-import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.camera.core.AspectRatio;
@@ -19,64 +48,16 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.LifecycleOwner;
 
-import android.Manifest;
-import android.animation.TimeInterpolator;
-import android.animation.ValueAnimator;
-import android.annotation.SuppressLint;
-import android.content.Context;
-import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.content.res.ColorStateList;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.ImageFormat;
-import android.graphics.Matrix;
-import android.graphics.Path;
-import android.graphics.Picture;
-import android.graphics.Rect;
-import android.graphics.YuvImage;
-import android.graphics.drawable.BitmapDrawable;
-import android.graphics.drawable.Drawable;
-import android.media.Image;
-import android.net.Uri;
-import android.os.Build;
-import android.os.Bundle;
-import android.os.Environment;
-import android.os.SystemClock;
-import android.provider.MediaStore;
-import android.provider.Settings;
-import android.util.Log;
-import android.util.Size;
-import android.view.Display;
-import android.view.DragEvent;
-import android.view.MotionEvent;
-import android.view.View;
-import android.view.ViewGroup;
-import android.widget.ImageButton;
-import android.widget.LinearLayout;
-import android.widget.TextView;
-import android.widget.Toast;
-
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.slider.LabelFormatter;
 import com.google.android.material.slider.Slider;
 import com.google.common.util.concurrent.ListenableFuture;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Date;
-import java.util.ArrayList;
-import java.util.Base64;
 import java.util.Locale;
-import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -113,8 +94,6 @@ public class MainActivity extends AppCompatActivity {
     CameraControl cameraControl;
     CameraInfo cameraInfo;
 
-    //TODO how to sprecifiy path??
-    String videoPath = "path";
 
     Bitmap bgBMP;
 
@@ -124,16 +103,27 @@ public class MainActivity extends AppCompatActivity {
     float mG;
     float mB;
 
+    int framewidth;
+    int frameheight;
+    String filepath = "/storage/emulated/0/Android/data/com.impostertools.mvpcamera/files/MVPCamera/";
+
     boolean isRecording = false;
-    ByteArrayOutputStream stream = new ByteArrayOutputStream();
 
     Matrix mat = new Matrix();
     int rotDeg = 1;
     private long mLastAnalysisResultTime;
 
+    BitmapToVideoEncoder bitmapToVideoEncoder = new BitmapToVideoEncoder(new BitmapToVideoEncoder.IBitmapToVideoEncoderCallback() {
+        @Override
+        public void onEncodingComplete(File outputFile) {
+            Toast.makeText(getApplicationContext(), "Encoding Complete!",Toast.LENGTH_SHORT).show();
+        }
+    });
+
     @SuppressLint({"ResourceAsColor", "ClickableViewAccessibility"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
 
 
         super.onCreate(savedInstanceState);
@@ -265,26 +255,17 @@ public class MainActivity extends AppCompatActivity {
         });
 
 
-
-
-
-
-
-
         executor = Executors.newSingleThreadExecutor();
+
         camera_capture_button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Toast.makeText(getApplicationContext(), "Recording must be implemented",Toast.LENGTH_SHORT).show();
                 startRecording();
                 if(isRecording){
                     stopRecording();
                 }
             }
-            // ADD CODE HERE
-            // CHECK RECORDING STATUS AND CALL EITHER initRecorder() or stopRecorder()
         });
-
 
         if(checkPermission()) {
             startCamera();
@@ -349,7 +330,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-
     private void startCamera() {
 
         ListenableFuture<ProcessCameraProvider> cameraProviderFuture
@@ -412,20 +392,15 @@ public class MainActivity extends AppCompatActivity {
                 cameraControl.setLinearZoom(zoom.getValue());
 
 
-
-
                 Bitmap frame = toBitmap(imagine,mat);
                 gpuImageView.setImage(frame);
+                framewidth = frame.getWidth();
+                frameheight = frame.getHeight();
 
                 if(isRecording){
-                    try {
-                        updateRecorder(gpuImageView.capture());
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
+                    bitmapToVideoEncoder.queueFrame(frame);
                 }
                 //gpuImageView.setRotation(rotDeg);
-
 
                 if(SystemClock.elapsedRealtime() - mLastAnalysisResultTime < 500) {
                     image.close();
@@ -527,47 +502,28 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void startRecording(){
-
-        //if recording is not complete yet then prevent the stream from getting cleared
-        if(isRecording){
-            return;
-        }
-        this.stream.reset();
         isRecording = true;
+        bitmapToVideoEncoder.startEncoding(framewidth, frameheight, new File(filepath));
+        Toast.makeText(
+                this,
+                "Recording started",
+                Toast.LENGTH_LONG)
+                .show();
     }
 
 
-    public void updateRecorder(Bitmap frame){
-        //compresses bitmap to png format and adds it to the bytearray
-        frame.compress(Bitmap.CompressFormat.PNG, 100, stream);
-    }
     public void stopRecording(){
         isRecording = false;
-        new Thread (){
-            @Override
-            public void run() {
-                super.run();
-                try {
-                    @SuppressWarnings("resource")
-                    FileInputStream v_input = new FileInputStream("/storage/emulated/0/Android/data/com.impostertools.mvpcamera/files/MVPCamera/");
-                    //TODO:
-                    //Object videodata = Base64.encodeToString(stream.toByteArray(), Base64.DEFAULT);
-                } catch (FileNotFoundException e) {
-                    e.printStackTrace();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-
-        };
+        bitmapToVideoEncoder.stopEncoding();
+        Toast.makeText(
+                this,
+                "Recording stopped",
+                Toast.LENGTH_LONG)
+                .show();
     }
 
 
-
-
-
-
-    //NEXT FUCTIONS
+    //NEXT FUNCTIONS
     //lockCamera(); Locks focus WB and exposure
     //arCore??
 
@@ -626,5 +582,6 @@ public class MainActivity extends AppCompatActivity {
 
         return bmp ;
     }
-
 }
+
+//Recorder Example from: https://stackoverflow.com/questions/17096726/how-to-encode-bitmaps-into-a-video-using-mediacodec
