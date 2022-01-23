@@ -105,7 +105,8 @@ public class MainActivity extends AppCompatActivity {
 
     int framewidth;
     int frameheight;
-    String filepath = "/storage/emulated/0/Android/data/com.impostertools.mvpcamera/files/MVPCamera/";
+
+
 
     boolean isRecording = false;
 
@@ -502,8 +503,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void startRecording(){
+
+        File fileDir = new File("/storage/emulated/0/Android/data/com.impostertools.mvpcamera/files/MVPCamera/");
+        if(!fileDir.exists()){
+            fileDir.mkdir();
+        }
         isRecording = true;
-        bitmapToVideoEncoder.startEncoding(framewidth, frameheight, new File(filepath));
+        bitmapToVideoEncoder.startEncoding(framewidth, frameheight, new File(String.valueOf(fileDir)));
         Toast.makeText(
                 this,
                 "Recording started",
