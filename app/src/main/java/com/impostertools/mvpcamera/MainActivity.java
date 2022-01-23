@@ -20,8 +20,11 @@ import android.media.Image;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.os.StrictMode;
 import android.os.SystemClock;
 import android.provider.MediaStore;
+import android.util.Log;
 import android.util.Size;
 import android.view.Display;
 import android.view.MotionEvent;
@@ -57,6 +60,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -105,6 +110,7 @@ public class MainActivity extends AppCompatActivity {
 
     int framewidth;
     int frameheight;
+    String previewPath = Environment.getExternalStorageDirectory().toString()+"/Movies/MVPCamera/vid.mp4";
 
 
 
@@ -129,6 +135,11 @@ public class MainActivity extends AppCompatActivity {
 
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_camera);
+        StrictMode.VmPolicy.Builder builder = new StrictMode.VmPolicy.Builder();
+        StrictMode.setVmPolicy(builder.build());
+
+
+
         container = findViewById(R.id.camera_container);
         camera_capture_button = findViewById(R.id.camera_capture_button);
 
@@ -398,9 +409,7 @@ public class MainActivity extends AppCompatActivity {
                 framewidth = frame.getWidth();
                 frameheight = frame.getHeight();
 
-                if(isRecording){
-                    bitmapToVideoEncoder.queueFrame(frame);
-                }
+
                 //gpuImageView.setRotation(rotDeg);
 
                 if(SystemClock.elapsedRealtime() - mLastAnalysisResultTime < 500) {
@@ -411,6 +420,14 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
+                        if(isRecording){
+                            try {
+                                bitmapToVideoEncoder.queueFrame(gpuImageView.capture());
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                                Log.i(TAG, "UI THread: added frame ");
+                            }
+                        }
                         //Run On UI
                     }
                 });
@@ -493,23 +510,38 @@ public class MainActivity extends AppCompatActivity {
 
     private void previewREC() {
         Toast.makeText(getApplicationContext(),"partially implemented",Toast.LENGTH_SHORT).show();
-        /*
+
         //this should work if we fix the issue with the file path
         Intent intent = new Intent();
         intent.setAction(Intent.ACTION_VIEW);
-        intent.setDataAndType(Uri.fromFile(new File(videoPath);
+        intent.setDataAndType(Uri.fromFile(new File(previewPath)),"video");
         startActivity(intent);
-        */
+
     }
 
     public void startRecording(){
 
-        File fileDir = new File("/storage/emulated/0/Android/data/com.impostertools.mvpcamera/files/MVPCamera/");
+        File fileDir = new File(Environment.getExternalStorageDirectory().toString()+"/Movies/MVPCamera");
         if(!fileDir.exists()){
-            fileDir.mkdir();
+            try {
+                Files.createDirectories(fileDir.toPath());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            }
+
+        Date date = new Date();
+        String timestamp = String.valueOf(date.getTime());
+        File vidFile = null;
+        try {
+            vidFile = File.createTempFile(timestamp,".mp4",fileDir);
+        } catch (IOException e) {
+            e.printStackTrace();
+            Log.i(TAG, "initRecorder: somethings wrong ");
         }
+        previewPath=vidFile.getPath().toString();
         isRecording = true;
-        bitmapToVideoEncoder.startEncoding(framewidth, frameheight, new File(String.valueOf(fileDir)));
+        bitmapToVideoEncoder.startEncoding(framewidth, frameheight, vidFile);
         Toast.makeText(
                 this,
                 "Recording started",
