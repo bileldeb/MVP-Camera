@@ -18,6 +18,9 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.media.Image;
 import android.net.Uri;
+import android.opengl.GLES20;
+import android.opengl.GLException;
+import android.opengl.GLSurfaceView;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -28,7 +31,9 @@ import android.util.Log;
 import android.util.Size;
 import android.view.Display;
 import android.view.MotionEvent;
+import android.view.Surface;
 import android.view.View;
+import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.Toast;
@@ -60,6 +65,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
 import java.nio.file.Files;
 import java.util.Date;
 import java.util.Locale;
@@ -67,25 +73,31 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
+import jp.co.cyberagent.android.gpuimage.GPUImage;
+import jp.co.cyberagent.android.gpuimage.GPUImageChromaKeyBlendFilter;
+import jp.co.cyberagent.android.gpuimage.GPUImageFilter;
+import jp.co.cyberagent.android.gpuimage.GPUImageFilterGroup;
+import jp.co.cyberagent.android.gpuimage.GPUImageMovieWriter;
 import jp.co.cyberagent.android.gpuimage.GPUImageView;
-import jp.co.cyberagent.android.gpuimage.filter.GPUImageChromaKeyBlendFilter;
-import jp.co.cyberagent.android.gpuimage.filter.GPUImageFilter;
+import jp.co.cyberagent.android.gpuimage.Rotation;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = MainActivity.class.getSimpleName();
 
     private static final int REQUEST_CODE_CAMERA_PERMISSION = 200;
-    private static final String[] PERMISSIONS = {Manifest.permission.CAMERA,Manifest.permission.READ_EXTERNAL_STORAGE};
+    private static final String[] PERMISSIONS = {Manifest.permission.CAMERA, Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.RECORD_AUDIO};
     private static final int REQUEST_CODE_READ_STORAGE = 300;
-
+    private static final int REQUEST_CODE_AUDIO_PERMISSION = 400;
 
 
     ConstraintLayout container;
     LinearLayout dynamicSlider;
     LinearLayout bottomSheet;
     ImageButton camera_capture_button;
+    GPUImage gpuImage;
     GPUImageView gpuImageView;
+    GLSurfaceView glSurface;
     Executor executor;
     ImageButton colorPicker;
     ImageButton imagePicker;
@@ -98,20 +110,23 @@ public class MainActivity extends AppCompatActivity {
 
     CameraControl cameraControl;
     CameraInfo cameraInfo;
+    Camera mCamera;
 
 
     Bitmap bgBMP;
 
-    float mChromaThreshold= (float) 0.3;
-    float mSmoothing= (float) 0.1;
+    float mChromaThreshold = (float) 0.3;
+    float mSmoothing = (float) 0.1;
     float mR;
     float mG;
     float mB;
 
-    int framewidth;
-    int frameheight;
-    String previewPath = Environment.getExternalStorageDirectory().toString()+"/Movies/MVPCamera/vid.mp4";
+    boolean mIsRecording;
+    GPUImageMovieWriter mMovieWriter;
 
+    int framewidth = 1080;
+    int frameheight = 1920;
+    String previewPath = Environment.getExternalStorageDirectory().toString() + "/Movies/MVPCamera";
 
 
     boolean isRecording = false;
@@ -123,21 +138,35 @@ public class MainActivity extends AppCompatActivity {
     BitmapToVideoEncoder bitmapToVideoEncoder = new BitmapToVideoEncoder(new BitmapToVideoEncoder.IBitmapToVideoEncoderCallback() {
         @Override
         public void onEncodingComplete(File outputFile) {
-            Toast.makeText(getApplicationContext(), "Encoding Complete!",Toast.LENGTH_SHORT).show();
+            Toast.makeText(getApplicationContext(), "Encoding Complete!", Toast.LENGTH_SHORT).show();
         }
     });
+
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        glSurface.onPause();
+        if (mIsRecording) {
+            mMovieWriter.stopRecording();
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        glSurface.onResume();
+    }
 
     @SuppressLint({"ResourceAsColor", "ClickableViewAccessibility"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
 
 
-
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_camera);
         StrictMode.VmPolicy.Builder builder = new StrictMode.VmPolicy.Builder();
         StrictMode.setVmPolicy(builder.build());
-
 
 
         container = findViewById(R.id.camera_container);
@@ -147,7 +176,7 @@ public class MainActivity extends AppCompatActivity {
         bottomSheet = findViewById(R.id.bottomSheetGroup);
         bottomSheetBehavior = BottomSheetBehavior.from(bottomSheet);
         bottomSheetBehavior.setHideable(false);
-        bottomSheetBehavior.setPeekHeight(getResources().getDimensionPixelSize(R.dimen.peekHeight),true);
+        bottomSheetBehavior.setPeekHeight(getResources().getDimensionPixelSize(R.dimen.peekHeight), true);
 
         dynamicSlider = findViewById(R.id.dynamicSlider);
         LinearLayout.LayoutParams layoutParams = (LinearLayout.LayoutParams) dynamicSlider.getLayoutParams();
@@ -158,43 +187,43 @@ public class MainActivity extends AppCompatActivity {
             @NonNull
             @Override
             public String getFormattedValue(float value) {
-                value=value*9.3f +0.7f;
+                value = value * 9.3f + 0.7f;
                 //return String.format(Locale.US, "%.1f", value)+ 'x';
-                return String.format(Locale.US, "%.1f", cameraInfo.getZoomState().getValue().getZoomRatio())+ 'x';
+                return String.format(Locale.US, "%.1f", cameraInfo.getZoomState().getValue().getZoomRatio()) + 'x';
             }
         });
 
-                ValueAnimator longerSlider = ValueAnimator.ofInt(getResources().getDimensionPixelSize(R.dimen.shortZoomSlider), getResources().getDimensionPixelSize(R.dimen.longZoomSlider));
-                longerSlider.setDuration(200);
-                ValueAnimator shorterSlider = ValueAnimator.ofInt(getResources().getDimensionPixelSize(R.dimen.longZoomSlider), getResources().getDimensionPixelSize(R.dimen.shortZoomSlider));
-                shorterSlider.setDuration(100);
-                shorterSlider.setStartDelay(20);
-                longerSlider.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-                    @Override
-                    public void onAnimationUpdate(ValueAnimator valueAnimator) {
-                        layoutParams.width = (int) valueAnimator.getAnimatedValue();
-                        dynamicSlider.setLayoutParams(layoutParams);
-                    }
-                });
-                shorterSlider.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-                    @Override
-                    public void onAnimationUpdate(ValueAnimator valueAnimator) {
-                        layoutParams.width = (int) valueAnimator.getAnimatedValue();
-                        dynamicSlider.setLayoutParams(layoutParams);
-                    }
-                });
+        ValueAnimator longerSlider = ValueAnimator.ofInt(getResources().getDimensionPixelSize(R.dimen.shortZoomSlider), getResources().getDimensionPixelSize(R.dimen.longZoomSlider));
+        longerSlider.setDuration(200);
+        ValueAnimator shorterSlider = ValueAnimator.ofInt(getResources().getDimensionPixelSize(R.dimen.longZoomSlider), getResources().getDimensionPixelSize(R.dimen.shortZoomSlider));
+        shorterSlider.setDuration(100);
+        shorterSlider.setStartDelay(20);
+        longerSlider.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator valueAnimator) {
+                layoutParams.width = (int) valueAnimator.getAnimatedValue();
+                dynamicSlider.setLayoutParams(layoutParams);
+            }
+        });
+        shorterSlider.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator valueAnimator) {
+                layoutParams.width = (int) valueAnimator.getAnimatedValue();
+                dynamicSlider.setLayoutParams(layoutParams);
+            }
+        });
 
         zoom.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View view, MotionEvent motionEvent) {
-                    if ((motionEvent.getAction() == MotionEvent.ACTION_DOWN))  {
-                        shorterSlider.end();
-                        longerSlider.start();
-                    }
-                    if ((motionEvent.getAction() == MotionEvent.ACTION_UP) || (motionEvent.getAction() == MotionEvent.ACTION_CANCEL) ) {
-                        longerSlider.end();
-                        shorterSlider.start();
-                    }
+                if ((motionEvent.getAction() == MotionEvent.ACTION_DOWN)) {
+                    shorterSlider.end();
+                    longerSlider.start();
+                }
+                if ((motionEvent.getAction() == MotionEvent.ACTION_UP) || (motionEvent.getAction() == MotionEvent.ACTION_CANCEL)) {
+                    longerSlider.end();
+                    shorterSlider.start();
+                }
 
                 return false;
             }
@@ -221,22 +250,28 @@ public class MainActivity extends AppCompatActivity {
         });
 
 
-
-        //GPUIMAGE VIEW SETUP
-        gpuImageView = findViewById(R.id.gpuimageview);
+        //GPUIMAGE  SETUP
+        glSurface = findViewById(R.id.surface);
+        gpuImage = new GPUImage(this);
+        gpuImage.setGLSurfaceView(glSurface);
         chromakey = new GPUImageChromaKeyBlendFilter();
-        gpuImageView.setFilter(chromakey);
+        gpuImage.setFilter(chromakey);
         Drawable bgD = AppCompatResources.getDrawable(this, R.drawable.bg);
         bgBMP = ((BitmapDrawable) bgD).getBitmap();
         ((GPUImageChromaKeyBlendFilter) chromakey).setBitmap(bgBMP);
-
-
-
-
+        mMovieWriter = new GPUImageMovieWriter();
+        GPUImageFilterGroup filters = new GPUImageFilterGroup();
+        filters.addFilter(chromakey);
+        filters.addFilter(mMovieWriter);
+        gpuImage.setFilter(filters);
+        // we can use a hybrid solution where preview is handled by the gpuimageview, with the same effects applied to the gpuimage
+        // which is just used for recording
+        //gpuImageView = findViewById(R.id.gpuPreview);
+        //gpuImageView.setFilter(filters);
 
 
         //UI CONTROLS
-        colorPicker=findViewById(R.id.COLORpicker);
+        colorPicker = findViewById(R.id.COLORpicker);
         colorPicker.setBackgroundTintList(AppCompatResources.getColorStateList(getApplicationContext(), R.color.white));
         colorPicker.setOnClickListener(new View.OnClickListener() {
             @RequiresApi(api = Build.VERSION_CODES.O)
@@ -250,7 +285,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        imagePicker=findViewById(R.id.IMGpicker);
+        imagePicker = findViewById(R.id.IMGpicker);
         imagePicker.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -258,7 +293,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        previewRecording=findViewById((R.id.previewRecording));
+        previewRecording = findViewById((R.id.previewRecording));
         previewRecording.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -270,21 +305,17 @@ public class MainActivity extends AppCompatActivity {
         executor = Executors.newSingleThreadExecutor();
 
         camera_capture_button.setOnClickListener(new View.OnClickListener() {
+            @RequiresApi(api = Build.VERSION_CODES.O)
             @Override
             public void onClick(View v) {
-                startRecording();
-                if(isRecording){
-                    stopRecording();
-                }
+                onClickRecord(camera_capture_button);
             }
         });
 
-        if(checkPermission()) {
+        if (checkPermission()) {
             startCamera();
         }
     }
-
-
 
 
     private boolean checkPermission() {
@@ -294,6 +325,14 @@ public class MainActivity extends AppCompatActivity {
                     this,
                     PERMISSIONS,
                     REQUEST_CODE_CAMERA_PERMISSION);
+            return false;
+        }
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(
+                    this,
+                    PERMISSIONS,
+                    REQUEST_CODE_AUDIO_PERMISSION);
             return false;
         }
 
@@ -378,10 +417,9 @@ public class MainActivity extends AppCompatActivity {
         Display d = getDisplay();
 
         ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
-                .setTargetResolution(new Size(1920, 1080))
+                .setTargetResolution(new Size(framewidth, frameheight))
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build();
-
 
 
         //IMAGE ANALYSIS
@@ -390,29 +428,28 @@ public class MainActivity extends AppCompatActivity {
             public void analyze(@NonNull ImageProxy image) {
                 int rotationDegrees = image.getImageInfo().getRotationDegrees();
                 @SuppressLint("UnsafeExperimentalUsageError") Image imagine = image.getImage();
-                if (rotDeg != rotationDegrees){
+                if (rotDeg != rotationDegrees) {
                     mat.postRotate(rotationDegrees);
                     rotDeg = rotationDegrees;
                 }
 
-                mChromaThreshold= threshold.getValue();
+                mChromaThreshold = threshold.getValue();
                 ((GPUImageChromaKeyBlendFilter) chromakey).setThresholdSensitivity(mChromaThreshold);
 
-                mSmoothing= smoothing.getValue();
+                mSmoothing = smoothing.getValue();
                 ((GPUImageChromaKeyBlendFilter) chromakey).setSmoothing(mSmoothing);
 
                 cameraControl.setLinearZoom(zoom.getValue());
 
 
-                Bitmap frame = toBitmap(imagine,mat);
-                gpuImageView.setImage(frame);
-                framewidth = frame.getWidth();
-                frameheight = frame.getHeight();
+                Bitmap frame = toBitmap(imagine, mat);
+                gpuImage.setImage(frame);
+
 
 
                 //gpuImageView.setRotation(rotDeg);
 
-                if(SystemClock.elapsedRealtime() - mLastAnalysisResultTime < 500) {
+                if (SystemClock.elapsedRealtime() - mLastAnalysisResultTime < 500) {
                     image.close();
                     return;
                 }
@@ -420,13 +457,8 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        if(isRecording){
-                            try {
-                                bitmapToVideoEncoder.queueFrame(gpuImageView.capture());
-                            } catch (InterruptedException e) {
-                                e.printStackTrace();
-                                Log.i(TAG, "UI THread: added frame ");
-                            }
+                        if (isRecording) {
+                            //do rec
                         }
                         //Run On UI
                     }
@@ -438,134 +470,159 @@ public class MainActivity extends AppCompatActivity {
         });
 
         cameraProvider.unbindAll();
-        Camera camera = cameraProvider.bindToLifecycle((LifecycleOwner)this,
+        mCamera = cameraProvider.bindToLifecycle((LifecycleOwner) this,
                 cameraSelector, imageAnalysis);
-        cameraControl = camera.getCameraControl();
-        cameraInfo = camera.getCameraInfo();
+        cameraControl = mCamera.getCameraControl();
+        cameraInfo = mCamera.getCameraInfo();
+        // if you use this
+        //gpuImage.setRotation(Rotation.ROTATION_90);
+        // and remove the matrix rotation in toBitmap(...) the frame rate becomes much better
+        //but the recorded video somehow is rotated and there will be issues with the pickcolr..
     }
-
 
 
     @SuppressLint("ClickableViewAccessibility")
     @RequiresApi(api = Build.VERSION_CODES.O)
     private void pickColor() {
-        Toast.makeText(getApplicationContext(),"Pick a color",Toast.LENGTH_SHORT).show();
-        gpuImageView.setOnTouchListener(new View.OnTouchListener() {
+        Toast.makeText(getApplicationContext(), "Pick a color", Toast.LENGTH_SHORT).show();
+        glSurface.setOnTouchListener(new View.OnTouchListener() {
             @RequiresApi(api = Build.VERSION_CODES.Q)
             @Override
             public boolean onTouch(View view, MotionEvent motionEvent) {
                 Bitmap current = null;
-                try {
-                    current = gpuImageView.capture();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-               Color c = current.getColor((int)motionEvent.getX(), (int)motionEvent.getY());
+                current = gpuImage.getBitmapWithFilterApplied();
+                Log.i(TAG, "onTouch W: "+ String.valueOf(current.getWidth()));
+                Log.i(TAG, "onTouch H: "+ String.valueOf(current.getHeight()));
+
+                Log.i(TAG, "onTouch X: "+ String.valueOf(motionEvent.getX()));
+                Log.i(TAG, "onTouch Y: "+ String.valueOf(motionEvent.getY()));
+
+                Color c = current.getColor((int) motionEvent.getX(), (int) motionEvent.getY());
                 mR = c.red();
                 mG = c.green();
                 mB = c.blue();
-                ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR,mG,mB);
-                colorPicker.setBackgroundTintList(ColorStateList.valueOf(Color.rgb(mR,mG,mB)));
+
+
+                ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR, mG, mB);
+                colorPicker.setBackgroundTintList(ColorStateList.valueOf(Color.rgb(mR, mG, mB)));
                 bottomSheetBehavior.setHideable(false);
                 bottomSheetBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
                 smoothing.setValue((float) 0.1);
                 threshold.setValue((float) 0.05);
-                gpuImageView.setOnTouchListener(null);
+                glSurface.setOnTouchListener(null);
                 return false;
             }
         });
     }
 
-    private void pickImage() {
-        Intent pickPhoto = new Intent(Intent.ACTION_PICK, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-        startActivityForResult(pickPhoto , 1);
+    @SuppressLint("ClickableViewAccessibility")
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    private void refresh() {
+        // idk what how the hell this works but if you use pick color the preview does not freeze
+        // so I made a modified version of the ontouchlistener to prevent freezing after coming back from pick image intent
+        // this means after coming back you must click somewhere on the screen to refresh
+        glSurface.setOnTouchListener(new View.OnTouchListener() {
+            @RequiresApi(api = Build.VERSION_CODES.Q)
+            @Override
+            public boolean onTouch(View view, MotionEvent motionEvent) {
+
+                Bitmap current = null;
+                current = gpuImage.getBitmapWithFilterApplied();
+
+                //Color c = current.getColor((int) motionEvent.getX(), (int) motionEvent.getY());
+
+                ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR, mG, mB);
+                colorPicker.setBackgroundTintList(ColorStateList.valueOf(Color.rgb(mR, mG, mB)));
+                bottomSheetBehavior.setHideable(false);
+                bottomSheetBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+                smoothing.setValue((float) 0.1);
+                threshold.setValue((float) 0.05);
+                glSurface.setOnTouchListener(null);
+                return false;
+            }
+        });
+
     }
 
+    private void pickImage() {
+        Intent pickPhoto = new Intent(Intent.ACTION_PICK, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+        startActivityForResult(pickPhoto, 1);
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.O)
     protected void onActivityResult(int requestCode, int resultCode, Intent imageReturnedIntent) {
         super.onActivityResult(requestCode, resultCode, imageReturnedIntent);
-                if(resultCode == RESULT_OK){
-                    Uri selectedImage = imageReturnedIntent.getData();
+        if (resultCode == RESULT_OK) {
+            Uri selectedImage = imageReturnedIntent.getData();
 
-                    Bitmap bitmap = null;
-                    try {
-                        bitmap = MediaStore.Images.Media.getBitmap(this.getContentResolver(), selectedImage);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
+            Bitmap bitmap = null;
+            try {
+                bitmap = MediaStore.Images.Media.getBitmap(this.getContentResolver(), selectedImage);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
 
-                    bgBMP = bitmap;
+            bgBMP = bitmap;
 
-                    chromakey = new GPUImageChromaKeyBlendFilter();
-                    ((GPUImageChromaKeyBlendFilter) chromakey).setBitmap(bgBMP);
-                    gpuImageView.setFilter(chromakey);
-
-                    ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR,mG,mB);
-                    ((GPUImageChromaKeyBlendFilter) chromakey).setThresholdSensitivity(mChromaThreshold);
-                    ((GPUImageChromaKeyBlendFilter) chromakey).setSmoothing(mSmoothing);
-
-
-                    imagePicker.setImageBitmap(getRoundedShape(bgBMP));
+            chromakey = new GPUImageChromaKeyBlendFilter();
+            ((GPUImageChromaKeyBlendFilter) chromakey).setBitmap(bgBMP);
+            GPUImageFilterGroup filters = new GPUImageFilterGroup();
+            filters.addFilter(chromakey);
+            filters.addFilter(mMovieWriter);
+            gpuImage.setFilter(filters);
+            ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR, mG, mB);
+            ((GPUImageChromaKeyBlendFilter) chromakey).setThresholdSensitivity(mChromaThreshold);
+            ((GPUImageChromaKeyBlendFilter) chromakey).setSmoothing(mSmoothing);
+            refresh();
+            imagePicker.setImageBitmap(getRoundedShape(bgBMP));
         }
     }
 
     private void previewREC() {
-        Toast.makeText(getApplicationContext(),"partially implemented",Toast.LENGTH_SHORT).show();
+        Toast.makeText(getApplicationContext(), "partially implemented", Toast.LENGTH_SHORT).show();
 
         //this should work if we fix the issue with the file path
         Intent intent = new Intent();
-        intent.setAction(Intent.ACTION_VIEW);
-        intent.setDataAndType(Uri.fromFile(new File(previewPath)),"video");
+        intent.setAction(Intent.ACTION_GET_CONTENT);
+        intent.setDataAndType(Uri.fromFile(new File(previewPath)), "video");
         startActivity(intent);
-
     }
 
-    public void startRecording(){
 
-        File fileDir = new File(Environment.getExternalStorageDirectory().toString()+"/Movies/MVPCamera");
-        if(!fileDir.exists()){
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    private String makePath() {
+        File fileDir = new File(Environment.getExternalStorageDirectory().toString() + "/Movies/MVPCamera");
+        if (!fileDir.exists()) {
             try {
                 Files.createDirectories(fileDir.toPath());
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            }
+        }
 
         Date date = new Date();
         String timestamp = String.valueOf(date.getTime());
         File vidFile = null;
-        try {
-            vidFile = File.createTempFile(timestamp,".mp4",fileDir);
-        } catch (IOException e) {
-            e.printStackTrace();
-            Log.i(TAG, "initRecorder: somethings wrong ");
+        vidFile = new File(fileDir.getPath(), "mvpc_" + timestamp + ".mp4");
+
+        return vidFile.getPath().toString();
+    }
+
+
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    private void onClickRecord(ImageButton btn) {
+        glSurface.requestRender();
+        if (mIsRecording) {
+            // go to stop recording
+            mIsRecording = false;
+            mMovieWriter.stopRecording();
+        } else {
+            // go to start recording
+            mIsRecording = true;
+            previewPath = makePath();
+            mMovieWriter.startRecording(makePath(), framewidth, frameheight);
         }
-        previewPath=vidFile.getPath().toString();
-        isRecording = true;
-        bitmapToVideoEncoder.startEncoding(framewidth, frameheight, vidFile);
-        Toast.makeText(
-                this,
-                "Recording started",
-                Toast.LENGTH_LONG)
-                .show();
     }
-
-
-    public void stopRecording(){
-        isRecording = false;
-        bitmapToVideoEncoder.stopEncoding();
-        Toast.makeText(
-                this,
-                "Recording stopped",
-                Toast.LENGTH_LONG)
-                .show();
-    }
-
-
-    //NEXT FUNCTIONS
-    //lockCamera(); Locks focus WB and exposure
-    //arCore??
-
-
 
     //BITMAP OPERATIONS
     public Bitmap getRoundedShape(Bitmap scaleBitmapImage) {
@@ -573,7 +630,7 @@ public class MainActivity extends AppCompatActivity {
         int targetWidth = 250;
         int targetHeight = 250;
         Bitmap targetBitmap = Bitmap.createBitmap(targetWidth,
-                targetHeight,Bitmap.Config.ARGB_8888);
+                targetHeight, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(targetBitmap);
         Path path = new Path();
         path.addCircle(((float) targetWidth - 1) / 2,
@@ -591,7 +648,8 @@ public class MainActivity extends AppCompatActivity {
                         targetHeight), null);
         return targetBitmap;
     }
-    private Bitmap toBitmap(Image image,Matrix mat) {
+
+    private Bitmap toBitmap(Image image, Matrix mat) {
         Image.Plane[] planes = image.getPlanes();
         ByteBuffer yBuffer = planes[0].getBuffer();
         ByteBuffer uBuffer = planes[1].getBuffer();
@@ -618,8 +676,6 @@ public class MainActivity extends AppCompatActivity {
         //rotation
         bmp = Bitmap.createBitmap(bmp, 0, 0, bmp.getWidth(), bmp.getHeight(), mat, true);
 
-        return bmp ;
+        return bmp;
     }
 }
-
-//Recorder Example from: https://stackoverflow.com/questions/17096726/how-to-encode-bitmaps-into-a-video-using-mediacodec

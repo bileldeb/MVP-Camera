@@ -36,7 +36,7 @@ dependencies {
     implementation 'io.reactivex.rxjava2:rxandroid:2.0.2'
 
     //GPU IMAGE
-    implementation 'jp.co.cyberagent.android:gpuimage:2.0.4'
+    implementation 'com.github.proghjy:android-gpuimage-videorecording:v1.4.2'
 
     // CameraX
     def camerax_version = "1.0.0-rc01"
