@@ -18,6 +18,7 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.media.Image;
 import android.net.Uri;
+import android.opengl.EGL14;
 import android.opengl.GLES20;
 import android.opengl.GLException;
 import android.opengl.GLSurfaceView;
@@ -90,14 +91,12 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_CODE_READ_STORAGE = 300;
     private static final int REQUEST_CODE_AUDIO_PERMISSION = 400;
 
-
     ConstraintLayout container;
     LinearLayout dynamicSlider;
     LinearLayout bottomSheet;
     ImageButton camera_capture_button;
     GPUImage gpuImage;
     GPUImageView gpuImageView;
-    GLSurfaceView glSurface;
     Executor executor;
     ImageButton colorPicker;
     ImageButton imagePicker;
@@ -146,7 +145,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        glSurface.onPause();
         if (mIsRecording) {
             mMovieWriter.stopRecording();
         }
@@ -155,7 +153,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        glSurface.onResume();
     }
 
     @SuppressLint({"ResourceAsColor", "ClickableViewAccessibility"})
@@ -167,6 +164,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_camera);
         StrictMode.VmPolicy.Builder builder = new StrictMode.VmPolicy.Builder();
         StrictMode.setVmPolicy(builder.build());
+
 
 
         container = findViewById(R.id.camera_container);
@@ -251,11 +249,8 @@ public class MainActivity extends AppCompatActivity {
 
 
         //GPUIMAGE  SETUP
-        glSurface = findViewById(R.id.surface);
-        gpuImage = new GPUImage(this);
-        gpuImage.setGLSurfaceView(glSurface);
+        gpuImageView = findViewById(R.id.gpuimageview);
         chromakey = new GPUImageChromaKeyBlendFilter();
-        gpuImage.setFilter(chromakey);
         Drawable bgD = AppCompatResources.getDrawable(this, R.drawable.bg);
         bgBMP = ((BitmapDrawable) bgD).getBitmap();
         ((GPUImageChromaKeyBlendFilter) chromakey).setBitmap(bgBMP);
@@ -263,11 +258,10 @@ public class MainActivity extends AppCompatActivity {
         GPUImageFilterGroup filters = new GPUImageFilterGroup();
         filters.addFilter(chromakey);
         filters.addFilter(mMovieWriter);
-        gpuImage.setFilter(filters);
-        // we can use a hybrid solution where preview is handled by the gpuimageview, with the same effects applied to the gpuimage
-        // which is just used for recording
-        //gpuImageView = findViewById(R.id.gpuPreview);
-        //gpuImageView.setFilter(filters);
+        gpuImageView.setFilter(filters);
+
+
+
 
 
         //UI CONTROLS
@@ -344,9 +338,6 @@ public class MainActivity extends AppCompatActivity {
                     REQUEST_CODE_READ_STORAGE);
             return false;
         }
-
-        // ADD CODE HERE
-        // RECORDING WITH AUDIO ADD AUDIO PERMISSION IN MANIFEST AND COMPLETE CHECK PERMISSION TO INCLUDE AUDIO
         return true;
     }
 
@@ -405,10 +396,6 @@ public class MainActivity extends AppCompatActivity {
     @RequiresApi(api = Build.VERSION_CODES.R)
     void bindPreview(@NonNull ProcessCameraProvider cameraProvider) {
 
-        Preview preview = new Preview.Builder()
-                .setTargetAspectRatio(AspectRatio.RATIO_16_9)
-                .build();
-
         CameraSelector cameraSelector = new CameraSelector.Builder()
                 .requireLensFacing(CameraSelector.LENS_FACING_BACK)
                 .build();
@@ -443,7 +430,7 @@ public class MainActivity extends AppCompatActivity {
 
 
                 Bitmap frame = toBitmap(imagine, mat);
-                gpuImage.setImage(frame);
+                gpuImageView.setImage(frame);
 
 
 
@@ -457,9 +444,6 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        if (isRecording) {
-                            //do rec
-                        }
                         //Run On UI
                     }
                 });
@@ -485,12 +469,16 @@ public class MainActivity extends AppCompatActivity {
     @RequiresApi(api = Build.VERSION_CODES.O)
     private void pickColor() {
         Toast.makeText(getApplicationContext(), "Pick a color", Toast.LENGTH_SHORT).show();
-        glSurface.setOnTouchListener(new View.OnTouchListener() {
+        gpuImageView.setOnTouchListener(new View.OnTouchListener() {
             @RequiresApi(api = Build.VERSION_CODES.Q)
             @Override
             public boolean onTouch(View view, MotionEvent motionEvent) {
                 Bitmap current = null;
-                current = gpuImage.getBitmapWithFilterApplied();
+                try {
+                    current = gpuImageView.capture();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
                 Log.i(TAG, "onTouch W: "+ String.valueOf(current.getWidth()));
                 Log.i(TAG, "onTouch H: "+ String.valueOf(current.getHeight()));
 
@@ -509,40 +497,12 @@ public class MainActivity extends AppCompatActivity {
                 bottomSheetBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
                 smoothing.setValue((float) 0.1);
                 threshold.setValue((float) 0.05);
-                glSurface.setOnTouchListener(null);
+                gpuImageView.setOnTouchListener(null);
                 return false;
             }
         });
     }
 
-    @SuppressLint("ClickableViewAccessibility")
-    @RequiresApi(api = Build.VERSION_CODES.O)
-    private void refresh() {
-        // idk what how the hell this works but if you use pick color the preview does not freeze
-        // so I made a modified version of the ontouchlistener to prevent freezing after coming back from pick image intent
-        // this means after coming back you must click somewhere on the screen to refresh
-        glSurface.setOnTouchListener(new View.OnTouchListener() {
-            @RequiresApi(api = Build.VERSION_CODES.Q)
-            @Override
-            public boolean onTouch(View view, MotionEvent motionEvent) {
-
-                Bitmap current = null;
-                current = gpuImage.getBitmapWithFilterApplied();
-
-                //Color c = current.getColor((int) motionEvent.getX(), (int) motionEvent.getY());
-
-                ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR, mG, mB);
-                colorPicker.setBackgroundTintList(ColorStateList.valueOf(Color.rgb(mR, mG, mB)));
-                bottomSheetBehavior.setHideable(false);
-                bottomSheetBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
-                smoothing.setValue((float) 0.1);
-                threshold.setValue((float) 0.05);
-                glSurface.setOnTouchListener(null);
-                return false;
-            }
-        });
-
-    }
 
     private void pickImage() {
         Intent pickPhoto = new Intent(Intent.ACTION_PICK, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
@@ -569,11 +529,10 @@ public class MainActivity extends AppCompatActivity {
             GPUImageFilterGroup filters = new GPUImageFilterGroup();
             filters.addFilter(chromakey);
             filters.addFilter(mMovieWriter);
-            gpuImage.setFilter(filters);
+            gpuImageView.setFilter(filters);
             ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR, mG, mB);
             ((GPUImageChromaKeyBlendFilter) chromakey).setThresholdSensitivity(mChromaThreshold);
             ((GPUImageChromaKeyBlendFilter) chromakey).setSmoothing(mSmoothing);
-            refresh();
             imagePicker.setImageBitmap(getRoundedShape(bgBMP));
         }
     }
@@ -611,7 +570,7 @@ public class MainActivity extends AppCompatActivity {
 
     @RequiresApi(api = Build.VERSION_CODES.O)
     private void onClickRecord(ImageButton btn) {
-        glSurface.requestRender();
+        Log.i(TAG, "onClickRecord: "+String.valueOf(mIsRecording));
         if (mIsRecording) {
             // go to stop recording
             mIsRecording = false;
