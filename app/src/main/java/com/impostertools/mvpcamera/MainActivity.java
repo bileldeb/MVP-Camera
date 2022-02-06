@@ -134,12 +134,6 @@ public class MainActivity extends AppCompatActivity {
     int rotDeg = 1;
     private long mLastAnalysisResultTime;
 
-    BitmapToVideoEncoder bitmapToVideoEncoder = new BitmapToVideoEncoder(new BitmapToVideoEncoder.IBitmapToVideoEncoderCallback() {
-        @Override
-        public void onEncodingComplete(File outputFile) {
-            Toast.makeText(getApplicationContext(), "Encoding Complete!", Toast.LENGTH_SHORT).show();
-        }
-    });
 
 
     @Override
