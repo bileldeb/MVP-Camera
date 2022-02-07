@@ -146,6 +146,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onResume() {
+        refresh();
         super.onResume();
     }
 
@@ -531,12 +532,24 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void refresh(){
+        chromakey = new GPUImageChromaKeyBlendFilter();
+        ((GPUImageChromaKeyBlendFilter) chromakey).setBitmap(bgBMP);
+        GPUImageFilterGroup filters = new GPUImageFilterGroup();
+        filters.addFilter(chromakey);
+        filters.addFilter(mMovieWriter);
+        gpuImageView.setFilter(filters);
+        ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR, mG, mB);
+        ((GPUImageChromaKeyBlendFilter) chromakey).setThresholdSensitivity(mChromaThreshold);
+        ((GPUImageChromaKeyBlendFilter) chromakey).setSmoothing(mSmoothing);
+    }
+
     private void previewREC() {
         Toast.makeText(getApplicationContext(), "partially implemented", Toast.LENGTH_SHORT).show();
 
         //this should work if we fix the issue with the file path
         Intent intent = new Intent();
-        intent.setAction(Intent.ACTION_GET_CONTENT);
+        intent.setAction(Intent.ACTION_QUICK_VIEW);
         intent.setDataAndType(Uri.fromFile(new File(previewPath)), "video");
         startActivity(intent);
     }
@@ -567,11 +580,15 @@ public class MainActivity extends AppCompatActivity {
         Log.i(TAG, "onClickRecord: "+String.valueOf(mIsRecording));
         if (mIsRecording) {
             // go to stop recording
+            Drawable shutter = AppCompatResources.getDrawable(this, R.drawable.ic_shutter_normal);
+            camera_capture_button.setBackground(shutter);
             mIsRecording = false;
             mMovieWriter.stopRecording();
         } else {
             // go to start recording
             mIsRecording = true;
+            Drawable shutter = AppCompatResources.getDrawable(this, R.drawable.ic_shutter_focused);
+            camera_capture_button.setBackground(shutter);
             previewPath = makePath();
             mMovieWriter.startRecording(makePath(), framewidth, frameheight);
         }
