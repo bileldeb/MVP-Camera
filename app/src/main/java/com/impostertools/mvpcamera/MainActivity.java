@@ -17,6 +17,7 @@ import android.graphics.YuvImage;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.media.Image;
+import android.media.MediaPlayer;
 import android.net.Uri;
 import android.opengl.EGL14;
 import android.opengl.GLES20;
@@ -116,9 +117,9 @@ public class MainActivity extends AppCompatActivity {
 
     float mChromaThreshold = (float) 0.3;
     float mSmoothing = (float) 0.1;
-    float mR;
-    float mG;
-    float mB;
+    float mR=0.3f;
+    float mG=0.31f;
+    float mB=0.32f;
 
     boolean mIsRecording;
     GPUImageMovieWriter mMovieWriter;
@@ -254,6 +255,8 @@ public class MainActivity extends AppCompatActivity {
         filters.addFilter(chromakey);
         filters.addFilter(mMovieWriter);
         gpuImageView.setFilter(filters);
+        ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR, mG, mB);
+
 
 
 
@@ -548,10 +551,13 @@ public class MainActivity extends AppCompatActivity {
         Toast.makeText(getApplicationContext(), "partially implemented", Toast.LENGTH_SHORT).show();
 
         //this should work if we fix the issue with the file path
+
         Intent intent = new Intent();
-        intent.setAction(Intent.ACTION_QUICK_VIEW);
-        intent.setDataAndType(Uri.fromFile(new File(previewPath)), "video");
+        intent.setAction(Intent.ACTION_VIEW);
+        intent.setDataAndType(Uri.parse(previewPath), "video/*");
         startActivity(intent);
+
+
     }
 
 
@@ -590,7 +596,7 @@ public class MainActivity extends AppCompatActivity {
             Drawable shutter = AppCompatResources.getDrawable(this, R.drawable.ic_shutter_focused);
             camera_capture_button.setBackground(shutter);
             previewPath = makePath();
-            mMovieWriter.startRecording(makePath(), framewidth, frameheight);
+            mMovieWriter.startRecording(previewPath, framewidth, frameheight);
         }
     }
 
