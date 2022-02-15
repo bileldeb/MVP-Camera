@@ -18,6 +18,7 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.media.Image;
 import android.media.MediaPlayer;
+import android.media.ThumbnailUtils;
 import android.net.Uri;
 import android.opengl.EGL14;
 import android.opengl.GLES20;
@@ -58,6 +59,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.LifecycleOwner;
 
+import com.bumptech.glide.Glide;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.slider.LabelFormatter;
 import com.google.android.material.slider.Slider;
@@ -96,7 +98,6 @@ public class MainActivity extends AppCompatActivity {
     LinearLayout dynamicSlider;
     LinearLayout bottomSheet;
     ImageButton camera_capture_button;
-    GPUImage gpuImage;
     GPUImageView gpuImageView;
     Executor executor;
     ImageButton colorPicker;
@@ -126,10 +127,8 @@ public class MainActivity extends AppCompatActivity {
 
     int framewidth = 1080;
     int frameheight = 1920;
-    String previewPath = Environment.getExternalStorageDirectory().toString() + "/Movies/MVPCamera";
-
-
-    boolean isRecording = false;
+    String previewPath = null;
+    
 
     Matrix mat = new Matrix();
     int rotDeg = 1;
@@ -140,10 +139,12 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
+        refresh();
         if (mIsRecording) {
             mMovieWriter.stopRecording();
         }
     }
+    
 
     @Override
     protected void onResume() {
@@ -171,6 +172,8 @@ public class MainActivity extends AppCompatActivity {
         bottomSheetBehavior = BottomSheetBehavior.from(bottomSheet);
         bottomSheetBehavior.setHideable(false);
         bottomSheetBehavior.setPeekHeight(getResources().getDimensionPixelSize(R.dimen.peekHeight), true);
+        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+
 
         dynamicSlider = findViewById(R.id.dynamicSlider);
         LinearLayout.LayoutParams layoutParams = (LinearLayout.LayoutParams) dynamicSlider.getLayoutParams();
@@ -548,15 +551,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void previewREC() {
-        Toast.makeText(getApplicationContext(), "partially implemented", Toast.LENGTH_SHORT).show();
-
-        //this should work if we fix the issue with the file path
-
-        Intent intent = new Intent();
-        intent.setAction(Intent.ACTION_VIEW);
-        intent.setDataAndType(Uri.parse(previewPath), "video/*");
-        startActivity(intent);
-
+        if (previewPath == null){
+            Intent playVideo = new Intent(Intent.ACTION_VIEW,MediaStore.Video.Media.EXTERNAL_CONTENT_URI);
+            startActivity(playVideo);
+        }
+        else {
+            Intent playVideo = new Intent(Intent.ACTION_VIEW);
+            playVideo.setDataAndType(Uri.fromFile(new File(previewPath)) ,"video/*");
+            startActivity(playVideo);
+        }
 
     }
 
