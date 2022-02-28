@@ -12,10 +12,13 @@ import android.graphics.Color;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.Path;
+import android.graphics.PointF;
 import android.graphics.Rect;
 import android.graphics.YuvImage;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
+import android.hardware.camera2.CameraMetadata;
+import android.hardware.camera2.CaptureRequest;
 import android.media.Image;
 import android.media.MediaPlayer;
 import android.media.ThumbnailUtils;
@@ -45,13 +48,17 @@ import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.content.res.AppCompatResources;
+import androidx.camera.camera2.interop.Camera2Interop;
 import androidx.camera.core.AspectRatio;
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraControl;
 import androidx.camera.core.CameraInfo;
 import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ExtendableBuilder;
+import androidx.camera.core.FocusMeteringAction;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageProxy;
+import androidx.camera.core.MeteringPointFactory;
 import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.constraintlayout.widget.ConstraintLayout;
@@ -113,7 +120,6 @@ public class MainActivity extends AppCompatActivity {
     CameraInfo cameraInfo;
     Camera mCamera;
 
-
     Bitmap bgBMP;
 
     float mChromaThreshold = (float) 0.3;
@@ -128,11 +134,13 @@ public class MainActivity extends AppCompatActivity {
     int framewidth = 1080;
     int frameheight = 1920;
     String previewPath = null;
+    Bitmap previewFrame;
     
 
     Matrix mat = new Matrix();
     int rotDeg = 1;
     private long mLastAnalysisResultTime;
+    View.OnTouchListener focusListener = null;
 
 
 
@@ -144,7 +152,7 @@ public class MainActivity extends AppCompatActivity {
             mMovieWriter.stopRecording();
         }
     }
-    
+
 
     @Override
     protected void onResume() {
@@ -261,6 +269,34 @@ public class MainActivity extends AppCompatActivity {
         ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR, mG, mB);
 
 
+        //Metering and focus
+        //Just experimenting with tap to focus
+        //currently not working
+        /*
+
+        focusListener = new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View view, MotionEvent motionEvent) {
+                Log.i(TAG, "onTouch X: "+ String.valueOf(motionEvent.getX()));
+                Log.i(TAG, "onTouch Y: "+ String.valueOf(motionEvent.getY()));
+                MeteringPointFactory fac = new MeteringPointFactory() {
+                    @NonNull
+                    @Override
+                    protected PointF convertPoint(float x, float y) {
+                        return new PointF(x,y);
+                    }
+                };
+
+                FocusMeteringAction.Builder focusAction = new  FocusMeteringAction
+                        .Builder(fac.createPoint(motionEvent.getX(),motionEvent.getY()));
+                cameraControl.startFocusAndMetering(focusAction.build());
+                return false;
+            }
+        };
+        gpuImageView.setOnTouchListener(focusListener);
+
+         */
+
 
 
 
@@ -345,6 +381,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
 
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_CODE_CAMERA_PERMISSION) {
             if (grantResults[0] == PackageManager.PERMISSION_DENIED) {
                 Toast.makeText(
@@ -361,7 +398,7 @@ public class MainActivity extends AppCompatActivity {
             if (grantResults[0] == PackageManager.PERMISSION_DENIED) {
                 Toast.makeText(
                         this,
-                        "Ymission",
+                        "must give permission",
                         Toast.LENGTH_LONG)
                         .show();
                 finish();
@@ -401,21 +438,27 @@ public class MainActivity extends AppCompatActivity {
                 .requireLensFacing(CameraSelector.LENS_FACING_BACK)
                 .build();
 
+
         executor = Executors.newSingleThreadExecutor();
-        Display d = getDisplay();
 
-        ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
+
+
+        @SuppressLint("RestrictedApi") ImageAnalysis.Builder imageAnalysisBuilder = new ImageAnalysis.Builder()
                 .setTargetResolution(new Size(framewidth, frameheight))
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .build();
+                .setCameraSelector(cameraSelector)
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST);
 
+        lockCamera(imageAnalysisBuilder);
+
+
+        ImageAnalysis imageAnalysis =  imageAnalysisBuilder.build();
 
         //IMAGE ANALYSIS
         imageAnalysis.setAnalyzer(executor, new ImageAnalysis.Analyzer() {
             @Override
             public void analyze(@NonNull ImageProxy image) {
                 int rotationDegrees = image.getImageInfo().getRotationDegrees();
-                @SuppressLint("UnsafeExperimentalUsageError") Image imagine = image.getImage();
+                @SuppressLint({"UnsafeExperimentalUsageError", "UnsafeOptInUsageError"}) Image imagine = image.getImage();
                 if (rotDeg != rotationDegrees) {
                     mat.postRotate(rotationDegrees);
                     rotDeg = rotationDegrees;
@@ -534,7 +577,7 @@ public class MainActivity extends AppCompatActivity {
             ((GPUImageChromaKeyBlendFilter) chromakey).setColorToReplace(mR, mG, mB);
             ((GPUImageChromaKeyBlendFilter) chromakey).setThresholdSensitivity(mChromaThreshold);
             ((GPUImageChromaKeyBlendFilter) chromakey).setSmoothing(mSmoothing);
-            imagePicker.setImageBitmap(getRoundedShape(bgBMP));
+            imagePicker.setImageBitmap(getRoundedShape(bgBMP,250));
         }
     }
 
@@ -593,15 +636,16 @@ public class MainActivity extends AppCompatActivity {
             camera_capture_button.setBackground(shutter);
             mIsRecording = false;
             mMovieWriter.stopRecording();
+            previewRecording.setImageBitmap(getRoundedShape(previewFrame,165));
+
         } else {
             //set recording preview
             Bitmap current = null;
             try {
-                current = gpuImageView.capture();
+                previewFrame = gpuImageView.capture();
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-            previewRecording.setImageBitmap(getRoundedShape(current));
             // go to start recording
             mIsRecording = true;
             Drawable shutter = AppCompatResources.getDrawable(this, R.drawable.ic_shutter_focused);
@@ -612,10 +656,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     //BITMAP OPERATIONS
-    public Bitmap getRoundedShape(Bitmap scaleBitmapImage) {
+    public Bitmap getRoundedShape(Bitmap scaleBitmapImage,int size) {
 
-        int targetWidth = 250;
-        int targetHeight = 250;
+        int targetWidth = size;
+        int targetHeight = size;
         Bitmap targetBitmap = Bitmap.createBitmap(targetWidth,
                 targetHeight, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(targetBitmap);
@@ -664,5 +708,14 @@ public class MainActivity extends AppCompatActivity {
         bmp = Bitmap.createBitmap(bmp, 0, 0, bmp.getWidth(), bmp.getHeight(), mat, true);
 
         return bmp;
+    }
+
+
+    //CAMERAX EXTENDER
+    void lockCamera(ExtendableBuilder<?> builder) {
+        Camera2Interop.Extender extender = new Camera2Interop.Extender(builder);
+        extender.setCaptureRequestOption(CaptureRequest.CONTROL_AE_LOCK, true);
+        extender.setCaptureRequestOption(CaptureRequest.CONTROL_AWB_LOCK, true);
+        //extender.setCaptureRequestOption(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_OFF);
     }
 }
