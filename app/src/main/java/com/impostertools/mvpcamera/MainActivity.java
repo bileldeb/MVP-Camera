@@ -594,6 +594,14 @@ public class MainActivity extends AppCompatActivity {
             mIsRecording = false;
             mMovieWriter.stopRecording();
         } else {
+            //set recording preview
+            Bitmap current = null;
+            try {
+                current = gpuImageView.capture();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            previewRecording.setImageBitmap(getRoundedShape(current));
             // go to start recording
             mIsRecording = true;
             Drawable shutter = AppCompatResources.getDrawable(this, R.drawable.ic_shutter_focused);
